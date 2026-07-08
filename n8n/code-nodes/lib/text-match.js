@@ -2,8 +2,10 @@
  * Case-insensitive text matching utilities for ICP evaluation.
  */
 
+const { foldAccents } = require('./normalize-company');
+
 function normalizeForMatch(text) {
-  return String(text || '')
+  return foldAccents(String(text || ''))
     .toLowerCase()
     .replace(/\s+/g, ' ')
     .trim();

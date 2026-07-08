@@ -33,7 +33,7 @@ All client-specific ICP and exclusion logic lives in **editable NocoDB configura
 6. Test:
 
 ```bash
-curl -X POST "https://your-n8n.example.com/webhook/qualification-gate-mvp" \
+curl -X POST "https://your-n8n.example.com/webhook/qualification-gate" \
   -H "Content-Type: application/json" \
   -d @tests/sample-payloads/nextconvers-sample-payload.json
 ```
@@ -66,6 +66,8 @@ See [docs/setup.md](docs/setup.md) for details.
 - [Qualification logic](docs/qualification-logic.md)
 - [NocoDB schema](docs/nocodb-schema.md)
 - [n8n workflow](docs/n8n-workflow.md)
+- [Pipedrive suppression sync](docs/pipedrive-suppression-sync.md)
+- [Scale architecture (16k+ orgs)](docs/scale-architecture.md)
 
 ## Local tests (no external services)
 

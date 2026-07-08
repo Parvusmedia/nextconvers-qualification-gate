@@ -3,41 +3,18 @@
  */
 
 const { normalizeForMatch, containsPattern } = require('./text-match');
-
-function normalizeLinkedinUrl(url) {
-  const s = String(url || '').trim().toLowerCase();
-  if (!s) return '';
-  return s.split('?')[0].replace(/\/$/, '');
-}
-
-function normalizeName(name) {
-  return String(name || '')
-    .toLowerCase()
-    .replace(/[^\w\s]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-function extractDomain(value) {
-  const s = String(value || '').trim().toLowerCase();
-  if (!s) return '';
-  try {
-    const withProto = s.includes('://') ? s : `https://${s}`;
-    const host = new URL(withProto).hostname.replace(/^www\./, '');
-    return host;
-  } catch (_e) {
-    const parts = s.split('@');
-    if (parts.length === 2) return parts[1].split('/')[0].replace(/^www\./, '');
-    return s.replace(/^www\./, '').split('/')[0];
-  }
-}
+const {
+  normalizeName,
+  normalizeLinkedinCompanyUrl,
+  extractDomain,
+} = require('./normalize-company');
 
 function getLeadFieldValue(lead, entityType) {
   switch (entityType) {
     case 'company_name':
       return lead.company_name || '';
     case 'company_domain':
-      return extractDomain(lead.company_linkedin_url || lead.email_enriched || '');
+      return extractDomain(lead.company_linkedin_url || lead.email_enriched || lead.company_website || '');
     case 'linkedin_company_url':
       return lead.company_linkedin_url || '';
     case 'person_linkedin_url':
@@ -80,7 +57,7 @@ function matchSuppression(lead, entity) {
       return leadDomain && entityDomain && leadDomain === entityDomain;
     }
     case 'linkedin_url':
-      return normalizeLinkedinUrl(leadValue) === normalizeLinkedinUrl(entityValue);
+      return normalizeLinkedinCompanyUrl(leadValue) === normalizeLinkedinCompanyUrl(entityValue);
     case 'normalized_name':
       return normalizeName(leadValue) === normalizeName(entityValue);
     default:
@@ -110,7 +87,7 @@ function evaluateSuppressions(lead, suppressions) {
 }
 
 module.exports = {
-  normalizeLinkedinUrl,
+  normalizeLinkedinCompanyUrl,
   normalizeName,
   extractDomain,
   getLeadFieldValue,

@@ -1,0 +1,15 @@
+{
+  "base_url": "https://pmedia.app.n8n.cloud",
+  "workflows": [
+    {
+      "file": "n8n/workflows/qualification-gate-mvp.json",
+      "n8n_name": "NextConvers Qualification Gate - MVP",
+      "workflow_id": "7sqk3TRIJWBS6NJo"
+    },
+    {
+      "file": "n8n/workflows/pipedrive-suppression-sync.json",
+      "n8n_name": "Pipedrive Customers → Suppression Sync",
+      "workflow_id": "ztwFJ7onmLEHhFcd"
+    }
+  ]
+}

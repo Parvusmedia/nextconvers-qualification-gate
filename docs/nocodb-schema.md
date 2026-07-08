@@ -83,6 +83,13 @@ Blocklist for competitors, customers, and manual blocks.
 | severity | `reject` or `review` |
 | reason | Categorical reason for audit |
 
+### Recommended operational use
+
+- Existing customers or excluded client accounts: add rows here, usually with `entity_type = company_name` or `company_domain`, `severity = reject`.
+- Competitors: add rows here, usually with `entity_type = company_domain`, `company_name`, or `company_type`, depending on how stable the source data is.
+- People or profiles you never want to route: use `person_linkedin_url`, `profile_id`, or keyword-based rows like `headline_keyword`.
+- Use empty `campaign_name` for account-wide exclusions, or set `campaign_name` to scope the suppression to one motion/campaign.
+
 ---
 
 ## lead_decisions
@@ -149,3 +156,24 @@ Header: `xc-token: {api_token}`
 ## Example policies
 
 See [`config/examples/`](../config/examples/) and [`nocodb/seed-data.md`](../nocodb/seed-data.md).
+
+---
+
+## What operators must maintain
+
+For the MVP decision tree to work well, the team should actively maintain:
+
+1. `clients`
+   - One row per NextConvers tenant/account.
+   - `account_id` must exactly match the incoming webhook payload.
+
+2. `campaign_policies`
+   - One active row per campaign you want to classify.
+   - Optional `__default__` row per account as a fallback.
+   - Fill target roles, exclusions, geography, industries, company-type hints, and thresholds here.
+
+3. `suppression_entities`
+   - Competitors, current customers, blocked companies, blocked domains, blocked profiles, and special-case manual exclusions.
+   - This is the main place to maintain exclusion lists.
+
+If those three tables are current, the rest of the tree runs automatically. `lead_decisions` is output/audit storage, not an input table.

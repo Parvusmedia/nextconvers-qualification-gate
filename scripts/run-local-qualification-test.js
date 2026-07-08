@@ -12,6 +12,7 @@ const ROOT = path.join(__dirname, '..');
 const { parseConfigArray } = require('../n8n/code-nodes/lib/parse-config-array');
 const { findMatchingPatterns, containsAnyInFields, normalizeForMatch } = require('../n8n/code-nodes/lib/text-match');
 const { evaluateSuppressions } = require('../n8n/code-nodes/lib/suppression-match');
+const { evaluateBlocklistSnapshot } = require('../n8n/code-nodes/lib/blocklist-snapshot');
 
 function parsePolicy(policy) {
   if (!policy) return null;
@@ -46,7 +47,7 @@ function parsePolicy(policy) {
   };
 }
 
-function evaluateHardRules(lead, rawPolicy, suppressions) {
+function evaluateHardRules(lead, rawPolicy, suppressions, blocklistSnapshot) {
   const ctx = {
     suppression_matches: [],
     risk_flags: [],
@@ -66,7 +67,10 @@ function evaluateHardRules(lead, rawPolicy, suppressions) {
   }
   ctx.policy_found = true;
 
-  ctx.suppression_matches = evaluateSuppressions(lead, suppressions);
+  ctx.suppression_matches = [
+    ...evaluateBlocklistSnapshot(lead, blocklistSnapshot),
+    ...evaluateSuppressions(lead, suppressions),
+  ];
   const rejectMatches = ctx.suppression_matches.filter(m => m.severity === 'reject');
   const reviewMatches = ctx.suppression_matches.filter(m => m.severity === 'review');
   if (rejectMatches.length) {
@@ -204,6 +208,9 @@ const scenarios = [
   { name: 'Broker on brokers policy → READY_FOR_CRM', lead: { ...baseLead, campaign_name: 'Cyberseguro - Brokers', headline: 'Insurance Broker', current_position: 'Insurance Broker', company_industry: 'Insurance', current_company_description: 'insurance brokerage for SME clients', company_score: 3 }, policy: brokersPolicy, suppressions: [], expected: 'READY_FOR_CRM' },
   { name: 'Recruiter → REJECTED', lead: { ...baseLead, headline: 'Talent Acquisition Specialist', current_position: 'Senior Recruiter' }, policy: finalClientPolicy, suppressions: [], expected: 'REJECTED' },
   { name: 'Movistar suppression → SUPPRESSED', lead: { ...baseLead, company_name: 'Movistar Empresas', headline: 'IT Manager' }, policy: finalClientPolicy, suppressions: [{ entity_type: 'company_name', entity_value: 'Movistar', match_type: 'contains', reason: 'existing_customer', severity: 'reject', active: true }], expected: 'SUPPRESSED' },
+  { name: 'Pipedrive customer via snapshot → SUPPRESSED', lead: { ...baseLead, company_name: 'Example Retail Holdings SA', headline: 'IT Manager' }, policy: finalClientPolicy, suppressions: [], blocklist_snapshot: { customer_names_json: '["example retail holdings"]', customer_domains_json: '[]', customer_linkedin_urls_json: '[]' }, expected: 'SUPPRESSED' },
+  { name: 'Telefonica de España via snapshot → SUPPRESSED', lead: { ...baseLead, company_name: 'Telefonica de España', headline: 'IT Manager', company_industry: 'Telecommunications' }, policy: finalClientPolicy, suppressions: [], blocklist_snapshot: { customer_names_json: '["telefonica de espana"]', customer_domains_json: '[]', customer_linkedin_urls_json: '[]' }, expected: 'SUPPRESSED' },
+  { name: 'Telefónica manual contains → SUPPRESSED', lead: { ...baseLead, company_name: 'Telefonica de España', headline: 'IT Manager', company_industry: 'Telecommunications' }, policy: finalClientPolicy, suppressions: [{ entity_type: 'company_name', entity_value: 'Telefónica', match_type: 'contains', reason: 'existing_customer', severity: 'reject', active: true }], expected: 'SUPPRESSED' },
   { name: 'High profile low company → READY_FOR_REVIEW', lead: { ...baseLead, profile_score: 5, company_score: 1 }, policy: finalClientPolicy, suppressions: [], expected: 'READY_FOR_REVIEW' },
   { name: 'No policy → READY_FOR_REVIEW', lead: { ...baseLead, campaign_name: 'Unknown' }, policy: null, suppressions: [], expected: 'READY_FOR_REVIEW' },
 ];
@@ -214,7 +221,7 @@ let failed = 0;
 console.log('NextConvers Qualification Gate — local smoke tests\n');
 
 for (const s of scenarios) {
-  const evaluation = evaluateHardRules(s.lead, s.policy, s.suppressions);
+  const evaluation = evaluateHardRules(s.lead, s.policy, s.suppressions, s.blocklist_snapshot || null);
   const decision = buildDecision(s.lead, s.policy, evaluation);
   const ok = decision.qualification_status === s.expected;
   if (ok) { passed++; console.log(`✓ ${s.name}`); }

@@ -21,8 +21,17 @@ function parseConfigArray(value) {
 }
 
 // --- lib/text-match.js ---
+function foldAccents(text) {
+  return String(text || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
+
 function normalizeForMatch(text) {
-  return String(text || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  return foldAccents(String(text || ''))
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function containsAnyInFields(fields, patterns) {
@@ -40,14 +49,66 @@ function findMatchingPatterns(fields, patterns) {
 }
 
 // --- lib/suppression-match.js ---
-function normalizeLinkedinUrl(url) {
-  const s = String(url || '').trim().toLowerCase();
-  if (!s) return '';
-  return s.split('?')[0].replace(/\/$/, '');
+const LEGAL_SUFFIX_PATTERNS = [
+  /\bcorreduria de seguros y reaseguros\b/gi,
+  /\bcorreduría de seguros y reaseguros\b/gi,
+  /\bcorreduria de seguros\b/gi,
+  /\bcorreduría de seguros\b/gi,
+  /\bsociedad limitada unipersonal\b/gi,
+  /\bsociedad anonima unipersonal\b/gi,
+  /\bsociedad limitada\b/gi,
+  /\bsociedad anonima\b/gi,
+  /\bs\s*l\s*u\b/gi,
+  /\bs\s*a\s*u\b/gi,
+  /\bslu\b/gi,
+  /\bsau\b/gi,
+];
+
+function stripLegalSuffixes(text) {
+  let value = String(text || '').trim();
+  for (let i = 0; i < 4; i += 1) {
+    const before = value;
+    for (const pattern of LEGAL_SUFFIX_PATTERNS) {
+      value = value.replace(pattern, ' ');
+    }
+    value = value
+      .replace(/[,\-–—]+$/g, ' ')
+      .replace(/,\s*(s\s*a\s*u|s\s*l\s*u|s\s*l|s\s*a)\s*$/i, ' ')
+      .replace(/\s+(s\s*a\s*u|s\s*l\s*u|s\s*l|s\s*a)\s*$/i, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (value === before) break;
+  }
+  return value;
 }
 
 function normalizeName(name) {
-  return String(name || '').toLowerCase().replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  let value = foldAccents(String(name || ''))
+    .toLowerCase()
+    .replace(/[^\w\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  value = stripLegalSuffixes(value);
+  return value.replace(/\s+/g, ' ').trim();
+}
+
+function normalizeLinkedinCompanyUrl(url) {
+  const s = String(url || '').trim().toLowerCase();
+  if (!s) return '';
+  try {
+    const withProto = s.includes('://') ? s : `https://${s}`;
+    const u = new URL(withProto);
+    if (!u.hostname.includes('linkedin.com')) return '';
+    const match = u.pathname.match(/\/company\/([^/?#]+)/i);
+    return match ? `linkedin.com/company/${match[1]}` : '';
+  } catch (_e) {
+    const match = s.match(/linkedin\.com\/company\/([^/?#]+)/i);
+    return match ? `linkedin.com/company/${match[1]}` : '';
+  }
+}
+
+function normalizeLinkedinUrl(url) {
+  return normalizeLinkedinCompanyUrl(url);
 }
 
 function extractDomain(value) {
@@ -66,7 +127,7 @@ function extractDomain(value) {
 function getLeadFieldValue(lead, entityType) {
   switch (entityType) {
     case 'company_name': return lead.company_name || '';
-    case 'company_domain': return extractDomain(lead.company_linkedin_url || lead.email_enriched || '');
+    case 'company_domain': return extractDomain(lead.company_linkedin_url || lead.email_enriched || lead.company_website || '');
     case 'linkedin_company_url': return lead.company_linkedin_url || '';
     case 'person_linkedin_url': return lead.linkedin_url || lead.profile_url || '';
     case 'profile_id': return lead.profile_id || '';
@@ -127,9 +188,11 @@ function evaluateSuppressions(lead, suppressions) {
 
 // --- Policy parsing ---
 function parsePolicy(policy) {
-  if (!policy || !policy.id) return null;
+  const policyId = policy && (policy.Id || policy.id);
+  if (!policy || !policyId) return null;
   return {
     ...policy,
+    id: policyId,
     allowed_countries: parseConfigArray(policy.allowed_countries),
     excluded_countries: parseConfigArray(policy.excluded_countries),
     allowed_industries: parseConfigArray(policy.allowed_industries),
@@ -168,7 +231,88 @@ function toBool(val) {
   return val === true || val === 'true' || val === 1 || val === '1';
 }
 
-function evaluateHardRules(lead, rawPolicy, suppressions) {
+// --- lib/blocklist-snapshot.js (inlined for n8n) ---
+function parseJsonArray(value) {
+  if (!value) return [];
+  if (Array.isArray(value)) return value.map(v => String(v).trim()).filter(Boolean);
+  const str = String(value).trim();
+  if (!str) return [];
+  try {
+    const parsed = JSON.parse(str);
+    return Array.isArray(parsed) ? parsed.map(v => String(v).trim()).filter(Boolean) : [];
+  } catch (_e) {
+    return [];
+  }
+}
+
+function parseBlocklistSnapshot(record) {
+  if (!record) {
+    return { customer_names_normalized: [], customer_domains: [], customer_linkedin_urls: [] };
+  }
+  const names = parseJsonArray(record.customer_names_json);
+  const domains = parseJsonArray(record.customer_domains_json)
+    .map(d => extractDomain(d))
+    .filter(Boolean);
+  const linkedinUrls = parseJsonArray(record.customer_linkedin_urls_json)
+    .map(u => normalizeLinkedinCompanyUrl(u))
+    .filter(Boolean);
+  return {
+    customer_names_normalized: names,
+    customer_domains: [...new Set(domains)],
+    customer_linkedin_urls: [...new Set(linkedinUrls)],
+  };
+}
+
+function evaluateBlocklistSnapshot(lead, snapshotRecord) {
+  const snapshot = parseBlocklistSnapshot(snapshotRecord);
+  const matches = [];
+  const nameSet = new Set(snapshot.customer_names_normalized);
+  const domainSet = new Set(snapshot.customer_domains);
+  const linkedinSet = new Set(snapshot.customer_linkedin_urls);
+  const leadName = normalizeName(lead.company_name);
+  const leadDomain = extractDomain(lead.company_linkedin_url || lead.email_enriched || lead.company_website || '');
+  const leadLinkedin = normalizeLinkedinCompanyUrl(lead.company_linkedin_url || '');
+
+  if (leadName && nameSet.has(leadName)) {
+    matches.push({
+      entity_type: 'company_name',
+      entity_value: lead.company_name,
+      match_type: 'normalized_name',
+      reason: 'existing_customer',
+      severity: 'reject',
+      campaign_name: '',
+      source: 'blocklist_snapshot',
+    });
+  }
+
+  if (leadDomain && domainSet.has(leadDomain)) {
+    matches.push({
+      entity_type: 'company_domain',
+      entity_value: leadDomain,
+      match_type: 'domain',
+      reason: 'existing_customer',
+      severity: 'reject',
+      campaign_name: '',
+      source: 'blocklist_snapshot',
+    });
+  }
+
+  if (leadLinkedin && linkedinSet.has(leadLinkedin)) {
+    matches.push({
+      entity_type: 'linkedin_company_url',
+      entity_value: lead.company_linkedin_url,
+      match_type: 'linkedin_url',
+      reason: 'existing_customer',
+      severity: 'reject',
+      campaign_name: '',
+      source: 'blocklist_snapshot',
+    });
+  }
+
+  return matches;
+}
+
+function evaluateHardRules(lead, rawPolicy, suppressions, blocklistSnapshot) {
   const ctx = {
     suppression_matches: [],
     risk_flags: [],
@@ -189,8 +333,10 @@ function evaluateHardRules(lead, rawPolicy, suppressions) {
   }
   ctx.policy_found = true;
 
-  // Suppression check
-  ctx.suppression_matches = evaluateSuppressions(lead, suppressions);
+  // Suppression check: snapshot (bulk customers) + manual rules
+  const snapshotMatches = evaluateBlocklistSnapshot(lead, blocklistSnapshot);
+  const manualMatches = evaluateSuppressions(lead, suppressions);
+  ctx.suppression_matches = [...snapshotMatches, ...manualMatches];
   const rejectMatches = ctx.suppression_matches.filter(m => m.severity === 'reject');
   const reviewMatches = ctx.suppression_matches.filter(m => m.severity === 'review');
 
@@ -344,14 +490,16 @@ return items.map(item => {
   const lead = data.lead || data;
   const policy = data.policy || null;
   const suppressions = data.suppressions || [];
+  const blocklist_snapshot = data.blocklist_snapshot || null;
 
-  const evaluation = evaluateHardRules(lead, policy, suppressions);
+  const evaluation = evaluateHardRules(lead, policy, suppressions, blocklist_snapshot);
 
   return {
     json: {
       lead,
       policy,
       suppressions,
+      blocklist_snapshot,
       evaluation,
     },
   };

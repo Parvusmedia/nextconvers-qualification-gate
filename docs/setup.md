@@ -53,7 +53,7 @@ Follow [`nocodb/seed-data.md`](../nocodb/seed-data.md):
 | `nocodb_lead_decisions_table_id` | Table ID |
 
 4. **Activate** the workflow.
-5. Copy the production webhook URL from the **Webhook** node (path: `qualification-gate-mvp`).
+5. Copy the production webhook URL from the **Webhook** node (path: `qualification-gate`).
 
 See also: [`n8n-workflow.md`](n8n-workflow.md)
 
@@ -64,7 +64,7 @@ See also: [`n8n-workflow.md`](n8n-workflow.md)
 Configure NextConvers to POST the full lead payload to:
 
 ```
-https://your-n8n.example.com/webhook/qualification-gate-mvp
+https://your-n8n.example.com/webhook/qualification-gate
 ```
 
 Trigger condition: `profile_score > 3` (enforced on NextConvers side; the gate can apply stricter `min_profile_score` in policy).
@@ -81,7 +81,7 @@ Required payload fields:
 ## Step 5: Test
 
 ```bash
-export WEBHOOK_URL="https://your-n8n.example.com/webhook/qualification-gate-mvp"
+export WEBHOOK_URL="https://your-n8n.example.com/webhook/qualification-gate"
 
 curl -s -X POST "$WEBHOOK_URL" \
   -H "Content-Type: application/json" \

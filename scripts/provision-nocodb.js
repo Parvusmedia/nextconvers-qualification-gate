@@ -123,6 +123,34 @@ function buildTables() {
       ],
     },
     {
+      ...t('account_blocklist_snapshots'),
+      columns: [
+        col.text('account_id'),
+        col.num('chunk_index'),
+        col.long('customer_names_json'),
+        col.long('customer_domains_json'),
+        col.long('customer_linkedin_urls_json'),
+        col.text('source'),
+        col.num('name_count'),
+        col.num('domain_count'),
+        col.num('linkedin_count'),
+        col.text('updated_at'),
+      ],
+    },
+    {
+      ...t('company_identities'),
+      columns: [
+        col.text('account_id'),
+        col.text('canonical_id'),
+        col.text('identity_type'),
+        col.text('identity_value'),
+        col.text('match_strength'),
+        col.text('source'),
+        col.bool('active'),
+        col.long('notes'),
+      ],
+    },
+    {
       ...t('lead_decisions'),
       columns: [
         col.text('account_id'), col.text('campaign_name'), col.text('product_name'), col.text('motion_type'),
@@ -175,6 +203,8 @@ const TABLE_KEYS = {
   clients: () => t('clients').title,
   campaign_policies: () => t('campaign_policies').title,
   suppression_entities: () => t('suppression_entities').title,
+  account_blocklist_snapshots: () => t('account_blocklist_snapshots').title,
+  company_identities: () => t('company_identities').title,
   lead_decisions: () => t('lead_decisions').title,
 };
 
@@ -272,6 +302,8 @@ async function main() {
     nocodb_clients_table_id: tableIds[TABLE_KEYS.clients()],
     nocodb_campaign_policies_table_id: tableIds[TABLE_KEYS.campaign_policies()],
     nocodb_suppression_entities_table_id: tableIds[TABLE_KEYS.suppression_entities()],
+    nocodb_blocklist_snapshots_table_id: tableIds[TABLE_KEYS.account_blocklist_snapshots()],
+    nocodb_company_identities_table_id: tableIds[TABLE_KEYS.company_identities()],
     nocodb_lead_decisions_table_id: tableIds[TABLE_KEYS.lead_decisions()],
     nocodb_feedback_events_table_id: tableIds[t('feedback_events').title],
     nocodb_learned_rules_table_id: tableIds[t('learned_rules').title],
@@ -286,6 +318,7 @@ async function main() {
     nocodb_base_id: deployment.nocodb_base_id,
     nocodb_campaign_policies_table_id: deployment.nocodb_campaign_policies_table_id,
     nocodb_suppression_entities_table_id: deployment.nocodb_suppression_entities_table_id,
+    nocodb_blocklist_snapshots_table_id: deployment.nocodb_blocklist_snapshots_table_id,
     nocodb_lead_decisions_table_id: deployment.nocodb_lead_decisions_table_id,
     nocodb_clients_table_id: deployment.nocodb_clients_table_id,
   }, null, 2));

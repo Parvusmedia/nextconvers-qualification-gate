@@ -94,9 +94,50 @@ After creating tables, copy each table ID into the n8n `config1` node.
 
 **entity_type values:** `company_name`, `company_domain`, `linkedin_company_url`, `person_linkedin_url`, `profile_id`, `headline_keyword`, `title_keyword`, `company_industry`, `company_type`, `email_domain`
 
+**Pipedrive sync rows** use `match_type` `normalized_name` or `domain` with `reason=existing_customer` and empty `campaign_name`. These are compiled into `account_blocklist_snapshots` for fast lookup — do not load all rows per lead.
+
 ---
 
-## 4. lead_decisions
+## 4. account_blocklist_snapshots
+
+Compact exclusion index for bulk existing customers (e.g. Pipedrive sync). **One row per account.**
+
+| Field | Type | Notes |
+|-------|------|-------|
+| id | ID | Auto |
+| account_id | Single Line Text | Unique per account |
+| chunk_index | Number | 0-based chunk for large name lists |
+| customer_names_json | Long Text | JSON array of normalized company names (chunk) |
+| customer_domains_json | Long Text | JSON array of domains |
+| source | Single Line Text | e.g. `pipedrive`, `manual_rebuild` |
+| name_count | Number | Count of names in snapshot |
+| domain_count | Number | Count of domains in snapshot |
+| updated_at | Single Line Text | ISO timestamp of last rebuild |
+
+Rebuilt automatically when Pipedrive sync completes, or manually: `node scripts/rebuild-blocklist-snapshot.js`
+
+---
+
+## 5. company_identities
+
+Manual and curated aliases linking legal names, brands, LinkedIn URLs, and domains to the same customer (`canonical_id`).
+
+| Field | Type | Notes |
+|-------|------|-------|
+| account_id | Single Line Text | |
+| canonical_id | Single Line Text | e.g. `pipedrive:12345` or manual slug |
+| identity_type | Single Line Text | `legal_name`, `brand_name`, `linkedin_url`, `domain`, `document_id`, `alias` |
+| identity_value | Single Line Text | Value to index in snapshot |
+| match_strength | Single Line Text | `strong` (SUPPRESSED) or `review` (manual review only) |
+| source | Single Line Text | `pipedrive`, `manual` |
+| active | Checkbox | |
+| notes | Long Text | Optional operator notes |
+
+Merged into `account_blocklist_snapshots` on rebuild. Use for marca ≠ razón social when Pipedrive/LinkedIn data is incomplete.
+
+---
+
+## 6. lead_decisions
 
 Audit log and review UI for all processed leads.
 
@@ -160,7 +201,7 @@ Audit log and review UI for all processed leads.
 
 ---
 
-## 5. feedback_events
+## 7. feedback_events
 
 Human review actions (future feedback loop; not used in MVP workflow).
 
@@ -179,7 +220,7 @@ Human review actions (future feedback loop; not used in MVP workflow).
 
 ---
 
-## 6. learned_rules
+## 8. learned_rules
 
 Future AI/feedback-driven rules (documented only; MVP does not read this table).
 
@@ -199,7 +240,7 @@ Future AI/feedback-driven rules (documented only; MVP does not read this table).
 
 ---
 
-## 7. conversation_control
+## 9. conversation_control
 
 Future Unipile integration (documented only; MVP does not use this table).
 
@@ -230,6 +271,8 @@ After creating tables, set these in the n8n `config1` node:
 nocodb_clients_table_id
 nocodb_campaign_policies_table_id
 nocodb_suppression_entities_table_id
+nocodb_blocklist_snapshots_table_id
+nocodb_company_identities_table_id
 nocodb_lead_decisions_table_id
 ```
 

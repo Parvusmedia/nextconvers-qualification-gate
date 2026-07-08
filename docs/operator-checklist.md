@@ -31,7 +31,16 @@ Re-provision: `NOCODB_BASE_ID=pgldlo34lezvu7e node scripts/provision-nocodb.js`
 
 ## Requires you (remaining steps)
 
-### 1. n8n — import workflow and set API token
+## Two n8n workflows (both required at scale)
+
+| # | Workflow | JSON file | Trigger | Purpose |
+|---|----------|-----------|---------|---------|
+| 1 | NextConvers Qualification Gate - MVP | `qualification-gate-mvp.json` | Webhook | Qualify each lead |
+| 2 | Pipedrive Customers → Suppression Sync | `pipedrive-suppression-sync.json` | Every hour | Sync Pipedrive customers → NocoDB |
+
+**Blueprint Workflow 2:** [`docs/pipedrive-suppression-sync.md`](../docs/pipedrive-suppression-sync.md)
+
+### 1. n8n — Qualification Gate (webhook)
 
 **n8n host:** `https://pmedia.app.n8n.cloud`
 
@@ -41,14 +50,26 @@ Re-provision: `NOCODB_BASE_ID=pgldlo34lezvu7e node scripts/provision-nocodb.js`
 | 2 | Open `config1` → set `nocodb_api_token` **or** run `node scripts/apply-deployment-secrets.js` after creating `config/deployment.local.env` |
 | 3 | Table IDs are **already set** in workflow JSON |
 | 4 | Activate workflow |
-| 5 | Webhook URL: `https://pmedia.app.n8n.cloud/webhook/qualification-gate-mvp` |
+| 5 | Webhook URL: `https://pmedia.app.n8n.cloud/webhook/qualification-gate` |
 | 6 | Test: `./scripts/test-n8n-webhook.sh` |
 
-### 2. NextConvers — register webhook
+### 2. n8n — Pipedrive suppression sync
 
 | Step | Action |
 |------|--------|
-| 1 | Point webhook to `https://pmedia.app.n8n.cloud/webhook/qualification-gate-mvp` |
+| 1 | Import [`n8n/workflows/pipedrive-suppression-sync.json`](../n8n/workflows/pipedrive-suppression-sync.json) |
+| 2 | Run `node scripts/apply-deployment-secrets.js` or set `pipedrive_api_token` in `config1` |
+| 3 | Set `pipedrive_customer_label_ids` = `41,42` |
+| 4 | *(Recommended)* Create Pipedrive org filter → set `pipedrive_filter_id` |
+| 5 | **Activate** workflow |
+| 6 | Execute once manually; check `Sync Suppressions to NocoDB` output |
+| 7 | Full blueprint: [`docs/pipedrive-suppression-sync.md`](../docs/pipedrive-suppression-sync.md) |
+
+### 3. NextConvers — register webhook
+
+| Step | Action |
+|------|--------|
+| 1 | Point webhook to `https://pmedia.app.n8n.cloud/webhook/qualification-gate` |
 | 2 | Trigger when `profile_score > 3` |
 | 3 | Ensure `account_id` in payload matches seeded value (`rq1lQcYTToC9hlWD4vO94g` or update seed) |
 

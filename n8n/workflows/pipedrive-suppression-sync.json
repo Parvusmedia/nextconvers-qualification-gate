@@ -1,0 +1,361 @@
+{
+  "name": "Pipedrive Customers → Suppression Sync",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "daysInterval": 1,
+              "triggerAtHour": 3
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -1400,
+        300
+      ],
+      "id": "schedule-001",
+      "name": "Daily Schedule"
+    },
+    {
+      "parameters": {
+        "content": "## Pipedrive → suppression_entities\n\nn8n Cloud Code nodes timeout at **60s**.\n\nThis workflow loops in small batches:\n1. Fetch 4 Pipedrive pages (~45s max)\n2. Bulk insert to NocoDB (100 rows/request)\n3. Loop until `fetch_complete`\n\nSet `pipedrive_filter_id` if you have 16k orgs.",
+        "height": 300,
+        "width": 500
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1440,
+        0
+      ],
+      "id": "sticky-001",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "cfg-1",
+              "name": "pipedrive_api_base",
+              "value": "https://api.pipedrive.com/v1",
+              "type": "string"
+            },
+            {
+              "id": "cfg-2",
+              "name": "pipedrive_api_token",
+              "value": "5dea6cf0a7eb328a10fa01918af5d8237d8dcca6",
+              "type": "string"
+            },
+            {
+              "id": "cfg-3",
+              "name": "pipedrive_customer_mode",
+              "value": "label_ids",
+              "type": "string"
+            },
+            {
+              "id": "cfg-4",
+              "name": "pipedrive_customer_label_ids",
+              "value": "41,42",
+              "type": "string"
+            },
+            {
+              "id": "cfg-5",
+              "name": "pipedrive_filter_id",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "cfg-6",
+              "name": "pipedrive_domain_field_key",
+              "value": "website",
+              "type": "string"
+            },
+            {
+              "id": "cfg-6b",
+              "name": "pipedrive_linkedin_field_key",
+              "value": "linkedin",
+              "type": "string"
+            },
+            {
+              "id": "cfg-6c",
+              "name": "pipedrive_document_field_key",
+              "value": "48f5c85e7cf48cc71ff63aef91a852c19de4e19b",
+              "type": "string"
+            },
+            {
+              "id": "cfg-7",
+              "name": "pipedrive_page_size",
+              "value": "500",
+              "type": "string"
+            },
+            {
+              "id": "cfg-8",
+              "name": "pipedrive_max_pages_per_run",
+              "value": "4",
+              "type": "string"
+            },
+            {
+              "id": "cfg-9",
+              "name": "pipedrive_max_loop_iterations",
+              "value": "20",
+              "type": "string"
+            },
+            {
+              "id": "cfg-10",
+              "name": "code_time_budget_ms",
+              "value": "45000",
+              "type": "string"
+            },
+            {
+              "id": "cfg-11",
+              "name": "qg_account_id",
+              "value": "rq1lQcYTToC9hlWD4vO94g",
+              "type": "string"
+            },
+            {
+              "id": "cfg-12",
+              "name": "nocodb_base_url",
+              "value": "https://mpa.parvusmedia.com",
+              "type": "string"
+            },
+            {
+              "id": "cfg-13",
+              "name": "nocodb_api_token",
+              "value": "22nOl6FgHNf2jpP42d7szATVSlHTc2iuT5CNoftU",
+              "type": "string"
+            },
+            {
+              "id": "cfg-14",
+              "name": "nocodb_suppression_entities_table_id",
+              "value": "m29pd9rqgfm3agu",
+              "type": "string"
+            },
+            {
+              "id": "cfg-15",
+              "name": "nocodb_page_size",
+              "value": "500",
+              "type": "string"
+            },
+            {
+              "id": "cfg-16",
+              "name": "nocodb_bulk_insert_size",
+              "value": "100",
+              "type": "string"
+            },
+            {
+              "id": "cfg-17",
+              "name": "sync_max_bulk_ops_per_run",
+              "value": "25",
+              "type": "string"
+            },
+            {
+              "id": "cfg-18",
+              "name": "sync_existing_load_max_pages",
+              "value": "3",
+              "type": "string"
+            },
+            {
+              "id": "cfg-19",
+              "name": "sync_enable_deactivate",
+              "value": "false",
+              "type": "string"
+            },
+            {
+              "id": "cfg-20",
+              "name": "nocodb_blocklist_snapshots_table_id",
+              "value": "m3gt8ogd66khgfo",
+              "type": "string"
+            },
+            {
+              "id": "cfg-21",
+              "name": "snapshot_rebuild_max_pages",
+              "value": "40",
+              "type": "string"
+            },
+            {
+              "id": "cfg-22",
+              "name": "nocodb_company_identities_table_id",
+              "value": "m3makq6onm0pstq",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -1160,
+        300
+      ],
+      "id": "config1-001",
+      "name": "config1"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ======================================================\n// n8n Code Node - Fetch Pipedrive customer organizations (batched)\n// Mode: Run Once for All Items\n// ======================================================\n\nfunction parseLabelIds(value) {\n  return String(value || '')\n    .split(/[,;\\s]+/)\n    .map(s => s.trim())\n    .filter(Boolean);\n}\n\nfunction toPositiveInt(value, fallback) {\n  const num = Number(value);\n  return Number.isFinite(num) && num > 0 ? Math.floor(num) : fallback;\n}\n\nfunction foldAccents(text) {\n  return String(text || '')\n    .normalize('NFD')\n    .replace(/[\\u0300-\\u036f]/g, '');\n}\n\nconst LEGAL_SUFFIX_PATTERNS = [\n  /\\bcorreduria de seguros y reaseguros\\b/gi,\n  /\\bcorreduría de seguros y reaseguros\\b/gi,\n  /\\bcorreduria de seguros\\b/gi,\n  /\\bcorreduría de seguros\\b/gi,\n  /\\bsociedad limitada unipersonal\\b/gi,\n  /\\bsociedad anonima unipersonal\\b/gi,\n  /\\bsociedad limitada\\b/gi,\n  /\\bsociedad anonima\\b/gi,\n  /\\bs\\s*l\\s*u\\b/gi,\n  /\\bs\\s*a\\s*u\\b/gi,\n  /\\bslu\\b/gi,\n  /\\bsau\\b/gi,\n];\n\nfunction stripLegalSuffixes(text) {\n  let value = String(text || '').trim();\n  for (let i = 0; i < 4; i += 1) {\n    const before = value;\n    for (const pattern of LEGAL_SUFFIX_PATTERNS) {\n      value = value.replace(pattern, ' ');\n    }\n    value = value\n      .replace(/[,\\-–—]+$/g, ' ')\n      .replace(/,\\s*(s\\s*a\\s*u|s\\s*l\\s*u|s\\s*l|s\\s*a)\\s*$/i, ' ')\n      .replace(/\\s+(s\\s*a\\s*u|s\\s*l\\s*u|s\\s*l|s\\s*a)\\s*$/i, ' ')\n      .replace(/\\s+/g, ' ')\n      .trim();\n    if (value === before) break;\n  }\n  return value;\n}\n\nfunction normalizeName(name) {\n  let value = foldAccents(String(name || ''))\n    .toLowerCase()\n    .replace(/[^\\w\\s]/g, ' ')\n    .replace(/\\s+/g, ' ')\n    .trim();\n  value = stripLegalSuffixes(value);\n  return value.replace(/\\s+/g, ' ').trim();\n}\n\nfunction normalizeLinkedinCompanyUrl(url) {\n  const s = String(url || '').trim().toLowerCase();\n  if (!s) return '';\n  try {\n    const withProto = s.includes('://') ? s : `https://${s}`;\n    const u = new URL(withProto);\n    if (!u.hostname.includes('linkedin.com')) return '';\n    const match = u.pathname.match(/\\/company\\/([^/?#]+)/i);\n    return match ? `linkedin.com/company/${match[1]}` : '';\n  } catch (_e) {\n    const match = s.match(/linkedin\\.com\\/company\\/([^/?#]+)/i);\n    return match ? `linkedin.com/company/${match[1]}` : '';\n  }\n}\n\nfunction extractDomain(value) {\n  const s = String(value || '').trim().toLowerCase();\n  if (!s) return '';\n  try {\n    const withProto = s.includes('://') ? s : `https://${s}`;\n    return new URL(withProto).hostname.replace(/^www\\./, '');\n  } catch (_e) {\n    const parts = s.split('@');\n    if (parts.length === 2) return parts[1].split('/')[0].replace(/^www\\./, '');\n    return s.replace(/^www\\./, '').split('/')[0];\n  }\n}\n\nfunction normalizeDocumentId(value) {\n  return foldAccents(String(value || ''))\n    .toUpperCase()\n    .replace(/[^A-Z0-9]/g, '')\n    .trim();\n}\n\nfunction orgLabelIds(org) {\n  if (Array.isArray(org.label_ids)) return org.label_ids.map(id => String(id));\n  if (org.label !== null && org.label !== undefined && org.label !== '') {\n    return [String(org.label)];\n  }\n  return [];\n}\n\nfunction isCustomerOrg(org, mode, labelIds) {\n  if (!org || !org.name) return false;\n  if (mode === 'all_organizations') return true;\n  if (mode === 'label_ids') {\n    if (!labelIds.length) return false;\n    return labelIds.some(id => orgLabelIds(org).includes(String(id)));\n  }\n  return false;\n}\n\nfunction getOrgField(org, fieldKey) {\n  const key = String(fieldKey || '').trim();\n  if (!key) return '';\n  const value = org[key];\n  if (value === null || value === undefined || value === '') return '';\n  return String(value).trim();\n}\n\nfunction getOrgDomain(org, domainFieldKey) {\n  const custom = getOrgField(org, domainFieldKey);\n  if (custom) return extractDomain(custom);\n  if (org.website) return extractDomain(org.website);\n  const email = String(org.cc_email || '');\n  if (email.includes('@') && !email.endsWith('@pipedrivemail.com')) {\n    return extractDomain(email);\n  }\n  return '';\n}\n\nfunction buildDesiredRows(customers, accountId, fieldKeys) {\n  const rows = [];\n  const seen = new Set();\n\n  function addRow(row) {\n    const key = `${row.entity_type}|${row.match_type}|${String(row.entity_value || '').trim().toLowerCase()}`;\n    if (!row.entity_value || seen.has(key)) return;\n    seen.add(key);\n    rows.push(row);\n  }\n\n  for (const org of customers) {\n    const name = String(org.name || '').trim();\n    if (name) {\n      addRow({\n        account_id: accountId,\n        campaign_name: '',\n        entity_type: 'company_name',\n        entity_value: name,\n        match_type: 'normalized_name',\n        reason: 'existing_customer',\n        severity: 'reject',\n        active: true,\n      });\n    }\n\n    const domain = getOrgDomain(org, fieldKeys.domain);\n    if (domain) {\n      addRow({\n        account_id: accountId,\n        campaign_name: '',\n        entity_type: 'company_domain',\n        entity_value: domain,\n        match_type: 'domain',\n        reason: 'existing_customer',\n        severity: 'reject',\n        active: true,\n      });\n    }\n\n    const linkedinRaw = getOrgField(org, fieldKeys.linkedin);\n    const linkedin = normalizeLinkedinCompanyUrl(linkedinRaw);\n    if (linkedin) {\n      addRow({\n        account_id: accountId,\n        campaign_name: '',\n        entity_type: 'linkedin_company_url',\n        entity_value: linkedinRaw,\n        match_type: 'linkedin_url',\n        reason: 'existing_customer',\n        severity: 'reject',\n        active: true,\n      });\n    }\n\n    const documentId = normalizeDocumentId(getOrgField(org, fieldKeys.document));\n    if (documentId) {\n      addRow({\n        account_id: accountId,\n        campaign_name: '',\n        entity_type: 'company_document',\n        entity_value: documentId,\n        match_type: 'exact',\n        reason: 'existing_customer',\n        severity: 'reject',\n        active: true,\n      });\n    }\n  }\n\n  return rows;\n}\n\nfunction getState(staticData) {\n  if (!staticData.pipedriveSync) {\n    staticData.pipedriveSync = {\n      nextStart: 0,\n      fetchComplete: false,\n      iteration: 0,\n      totalOrgsFetched: 0,\n      totalCustomersFound: 0,\n    };\n  }\n  return staticData.pipedriveSync;\n}\n\nfunction resetState(staticData) {\n  staticData.pipedriveSync = {\n    nextStart: 0,\n    fetchComplete: false,\n    iteration: 0,\n    totalOrgsFetched: 0,\n    totalCustomersFound: 0,\n  };\n}\n\n// --- MAIN (n8n) ---\nconst cfg = $('config1').first().json;\nconst token = cfg.pipedrive_api_token;\nconst base = String(cfg.pipedrive_api_base || 'https://api.pipedrive.com/v1').replace(/\\/$/, '');\nconst mode = cfg.pipedrive_customer_mode || 'label_ids';\nconst labelIds = parseLabelIds(cfg.pipedrive_customer_label_ids);\nconst accountId = cfg.qg_account_id;\nconst filterId = String(cfg.pipedrive_filter_id || '').trim();\nconst pageSize = toPositiveInt(cfg.pipedrive_page_size, 500);\nconst maxPagesPerRun = toPositiveInt(cfg.pipedrive_max_pages_per_run, 4);\nconst maxLoopIterations = toPositiveInt(cfg.pipedrive_max_loop_iterations, 20);\nconst timeBudgetMs = toPositiveInt(cfg.code_time_budget_ms, 45000);\nconst fieldKeys = {\n  domain: cfg.pipedrive_domain_field_key || 'website',\n  linkedin: cfg.pipedrive_linkedin_field_key || 'linkedin',\n  document: cfg.pipedrive_document_field_key || '48f5c85e7cf48cc71ff63aef91a852c19de4e19b',\n};\n\nif (!token) throw new Error('pipedrive_api_token is missing in config1');\nif (!accountId) throw new Error('qg_account_id is missing in config1');\nif (mode === 'label_ids' && !labelIds.length && !filterId) {\n  throw new Error('pipedrive_customer_label_ids is empty. Example: 41,42');\n}\n\nconst staticData = $getWorkflowStaticData('global');\nconst state = getState(staticData);\nconst startedAt = Date.now();\n\nif (state.fetchComplete) {\n  resetState(staticData);\n}\n\nconst batchOrgs = [];\nlet pagesFetched = 0;\nlet start = state.nextStart;\n\nwhile (pagesFetched < maxPagesPerRun) {\n  if (Date.now() - startedAt > timeBudgetMs) break;\n  if (state.iteration >= maxLoopIterations) break;\n\n  const qs = { api_token: token, start, limit: pageSize };\n  if (filterId) qs.filter_id = filterId;\n\n  const res = await this.helpers.httpRequest({\n    method: 'GET',\n    url: `${base}/organizations`,\n    qs,\n    json: true,\n  });\n\n  if (!res.success) {\n    throw new Error(res.error || res.error_info || 'Pipedrive organizations API failed');\n  }\n\n  const batch = Array.isArray(res.data) ? res.data : [];\n  batchOrgs.push(...batch);\n  pagesFetched += 1;\n  state.totalOrgsFetched += batch.length;\n\n  const pag = res.additional_data && res.additional_data.pagination;\n  if (!pag || !pag.more_items_in_collection) {\n    state.fetchComplete = true;\n    state.nextStart = 0;\n    break;\n  }\n\n  start = pag.next_start;\n  state.nextStart = start;\n}\n\nstate.iteration += 1;\n\nconst customers = filterId\n  ? batchOrgs.filter(org => org && org.name)\n  : batchOrgs.filter(org => isCustomerOrg(org, mode, labelIds));\n\nstate.totalCustomersFound += customers.length;\n\nconst desired_rows = buildDesiredRows(customers, accountId, fieldKeys);\n\nreturn [{\n  json: {\n    desired_rows,\n    batch_org_count: batchOrgs.length,\n    batch_customer_count: customers.length,\n    suppression_row_count: desired_rows.length,\n    fetch_complete: state.fetchComplete,\n    fetch_next_start: state.nextStart,\n    pipedrive_pages_fetched: pagesFetched,\n    pipedrive_total_orgs_fetched: state.totalOrgsFetched,\n    pipedrive_total_customers_found: state.totalCustomersFound,\n    pipedrive_iteration: state.iteration,\n    pipedrive_filter_id: filterId || null,\n    timed_out: Date.now() - startedAt > timeBudgetMs,\n  },\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -920,
+        300
+      ],
+      "id": "fetch-001",
+      "name": "Fetch Pipedrive Customers"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ======================================================\n// n8n Code Node - Sync Pipedrive batch to suppression_entities\n// Mode: Run Once for All Items\n// Uses bulk NocoDB inserts + time budget for n8n Cloud 60s Code limit.\n// Pending rows are stored in workflow static data between loop iterations.\n// ======================================================\n\nconst SYNC_MATCH_TYPES = new Set(['normalized_name', 'domain', 'linkedin_url', 'exact']);\n\nfunction getRecords(resp) {\n  if (!resp) return [];\n  if (Array.isArray(resp.list)) return resp.list;\n  if (Array.isArray(resp.records)) return resp.records;\n  if (Array.isArray(resp)) return resp;\n  return [];\n}\n\nfunction toPositiveInt(value, fallback) {\n  const num = Number(value);\n  return Number.isFinite(num) && num > 0 ? Math.floor(num) : fallback;\n}\n\nfunction rowKey(row) {\n  const type = String(row.entity_type || '');\n  const match = String(row.match_type || '');\n  const value = String(row.entity_value || '').trim().toLowerCase();\n  return `${type}|${match}|${value}`;\n}\n\nfunction isSyncManagedRow(row) {\n  if (row.reason !== 'existing_customer') return false;\n  if (row.campaign_name && row.campaign_name !== '') return false;\n  if (!SYNC_MATCH_TYPES.has(row.match_type)) return false;\n  if (row.match_type === 'exact' && row.entity_type !== 'company_document') return false;\n  if (row.match_type === 'linkedin_url' && row.entity_type !== 'linkedin_company_url') return false;\n  return true;\n}\n\nfunction chunkArray(items, size) {\n  const chunks = [];\n  for (let i = 0; i < items.length; i += size) {\n    chunks.push(items.slice(i, i + size));\n  }\n  return chunks;\n}\n\nfunction hasTimeLeft(startedAt, budgetMs) {\n  return Date.now() - startedAt < budgetMs;\n}\n\nfunction mergeRows(pendingRows, batchRows) {\n  const rowMap = new Map();\n  for (const row of pendingRows) rowMap.set(rowKey(row), row);\n  for (const row of batchRows) rowMap.set(rowKey(row), row);\n  return [...rowMap.values()];\n}\n\nasync function loadExistingKeys(context, cfg, startedAt, budgetMs) {\n  const baseUrl = String(cfg.nocodb_base_url || '').replace(/\\/$/, '');\n  const tableId = cfg.nocodb_suppression_entities_table_id;\n  const token = cfg.nocodb_api_token;\n  const headers = { 'xc-token': token };\n  const pageSize = toPositiveInt(cfg.nocodb_page_size, 500);\n  const maxPages = toPositiveInt(cfg.sync_existing_load_max_pages, 3);\n  const where = `(account_id,eq,${cfg.qg_account_id})~and(reason,eq,existing_customer)`;\n\n  const keys = new Set();\n  let offset = 0;\n\n  for (let page = 0; page < maxPages; page += 1) {\n    if (!hasTimeLeft(startedAt, budgetMs)) break;\n\n    const res = await context.helpers.httpRequest({\n      method: 'GET',\n      url: `${baseUrl}/api/v2/tables/${tableId}/records`,\n      qs: { where, limit: pageSize, offset },\n      headers,\n      json: true,\n    });\n\n    const batch = getRecords(res).filter(isSyncManagedRow);\n    for (const row of batch) keys.add(rowKey(row));\n    if (batch.length < pageSize) break;\n    offset += pageSize;\n  }\n\n  return keys;\n}\n\n// --- MAIN (n8n) ---\nconst cfg = $('config1').first().json;\nconst fetchData = $('Fetch Pipedrive Customers').first().json;\nconst startedAt = Date.now();\nconst timeBudgetMs = toPositiveInt(cfg.code_time_budget_ms, 45000);\nconst bulkInsertSize = toPositiveInt(cfg.nocodb_bulk_insert_size, 100);\nconst maxBulkOps = toPositiveInt(cfg.sync_max_bulk_ops_per_run, 25);\nconst enableDeactivate = String(cfg.sync_enable_deactivate || 'false') === 'true';\n\nconst baseUrl = String(cfg.nocodb_base_url || '').replace(/\\/$/, '');\nconst tableId = cfg.nocodb_suppression_entities_table_id;\nconst token = cfg.nocodb_api_token;\nconst headers = { 'xc-token': token, 'Content-Type': 'application/json' };\n\nif (!tableId || !token) {\n  throw new Error('NocoDB config missing in config1');\n}\n\nconst staticData = $getWorkflowStaticData('global');\nif (!staticData.existingKeys) staticData.existingKeys = [];\nif (!staticData.pendingRows) staticData.pendingRows = [];\n\nconst pendingFromPrior = staticData.pendingRows.map(row => ({ ...row }));\nconst batchRows = (fetchData.desired_rows || []).map(row => ({ ...row }));\nconst combinedRows = mergeRows(pendingFromPrior, batchRows);\n\nconst existingKeySet = new Set(staticData.existingKeys);\nif (existingKeySet.size < 1000) {\n  const loadedKeys = await loadExistingKeys(this, cfg, startedAt, timeBudgetMs);\n  for (const key of loadedKeys) existingKeySet.add(key);\n  staticData.existingKeys = [...existingKeySet];\n}\n\nconst toCreate = [];\nlet unchanged = 0;\n\nfor (const row of combinedRows) {\n  const key = rowKey(row);\n  if (existingKeySet.has(key)) {\n    unchanged += 1;\n  } else {\n    toCreate.push(row);\n  }\n}\n\nlet created = 0;\nlet bulkOps = 0;\nlet bulkLimitReached = false;\nlet processedCount = 0;\nconst errors = [];\n\nfor (const chunk of chunkArray(toCreate, bulkInsertSize)) {\n  if (!hasTimeLeft(startedAt, timeBudgetMs)) {\n    bulkLimitReached = true;\n    break;\n  }\n  if (bulkOps >= maxBulkOps) {\n    bulkLimitReached = true;\n    break;\n  }\n\n  try {\n    await this.helpers.httpRequest({\n      method: 'POST',\n      url: `${baseUrl}/api/v2/tables/${tableId}/records`,\n      headers,\n      body: chunk,\n      json: true,\n    });\n    for (const row of chunk) existingKeySet.add(rowKey(row));\n    created += chunk.length;\n    processedCount += chunk.length;\n    bulkOps += 1;\n  } catch (error) {\n    errors.push({ action: 'bulk_create', size: chunk.length, message: error.message });\n    bulkLimitReached = true;\n    break;\n  }\n}\n\nstaticData.pendingRows = toCreate.slice(processedCount);\nstaticData.existingKeys = [...existingKeySet];\n\nlet deactivated = 0;\nif (enableDeactivate && fetchData.fetch_complete && staticData.pendingRows.length === 0) {\n  // Optional deactivate pass only after all pending rows are written.\n}\n\nif (fetchData.fetch_complete && staticData.pendingRows.length === 0) {\n  staticData.existingKeys = [];\n  staticData.pendingRows = [];\n}\n\nreturn [{\n  json: {\n    created,\n    unchanged,\n    deactivated,\n    batch_desired_count: batchRows.length,\n    pending_from_prior_count: pendingFromPrior.length,\n    combined_row_count: combinedRows.length,\n    to_create_count: toCreate.length,\n    pending_remaining_count: staticData.pendingRows.length,\n    bulk_ops_performed: bulkOps,\n    bulk_limit_reached: bulkLimitReached,\n    fetch_complete: fetchData.fetch_complete === true,\n    sync_complete: fetchData.fetch_complete === true && staticData.pendingRows.length === 0,\n    existing_keys_cached: existingKeySet.size,\n    pipedrive_iteration: fetchData.pipedrive_iteration,\n    timed_out: !hasTimeLeft(startedAt, timeBudgetMs),\n    errors,\n    completed_at: new Date().toISOString(),\n  },\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -680,
+        300
+      ],
+      "id": "sync-001",
+      "name": "Sync Suppressions to NocoDB"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "sync-incomplete",
+              "leftValue": "={{ $json.sync_complete }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "false"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -440,
+        300
+      ],
+      "id": "if-more-pages",
+      "name": "Sync Still Running?"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ======================================================\n// n8n Code Node - Rebuild account_blocklist_snapshots from suppression_entities\n// Mode: Run Once for All Items\n// Runs when Pipedrive sync completes (sync_complete === true).\n// ======================================================\n\nconst MAX_JSON_CHARS = 90000;\n\nfunction getRecords(resp) {\n  if (!resp) return [];\n  if (Array.isArray(resp.list)) return resp.list;\n  if (Array.isArray(resp.records)) return resp.records;\n  if (Array.isArray(resp)) return resp;\n  return [];\n}\n\nfunction toPositiveInt(value, fallback) {\n  const num = Number(value);\n  return Number.isFinite(num) && num > 0 ? Math.floor(num) : fallback;\n}\n\nfunction foldAccents(text) {\n  return String(text || '')\n    .normalize('NFD')\n    .replace(/[\\u0300-\\u036f]/g, '');\n}\n\nconst LEGAL_SUFFIX_PATTERNS = [\n  /\\bcorreduria de seguros y reaseguros\\b/gi,\n  /\\bcorreduría de seguros y reaseguros\\b/gi,\n  /\\bcorreduria de seguros\\b/gi,\n  /\\bcorreduría de seguros\\b/gi,\n  /\\bsociedad limitada unipersonal\\b/gi,\n  /\\bsociedad anonima unipersonal\\b/gi,\n  /\\bsociedad limitada\\b/gi,\n  /\\bsociedad anonima\\b/gi,\n  /\\bs\\s*l\\s*u\\b/gi,\n  /\\bs\\s*a\\s*u\\b/gi,\n  /\\bslu\\b/gi,\n  /\\bsau\\b/gi,\n];\n\nfunction stripLegalSuffixes(text) {\n  let value = String(text || '').trim();\n  for (let i = 0; i < 4; i += 1) {\n    const before = value;\n    for (const pattern of LEGAL_SUFFIX_PATTERNS) {\n      value = value.replace(pattern, ' ');\n    }\n    value = value\n      .replace(/[,\\-–—]+$/g, ' ')\n      .replace(/,\\s*(s\\s*a\\s*u|s\\s*l\\s*u|s\\s*l|s\\s*a)\\s*$/i, ' ')\n      .replace(/\\s+(s\\s*a\\s*u|s\\s*l\\s*u|s\\s*l|s\\s*a)\\s*$/i, ' ')\n      .replace(/\\s+/g, ' ')\n      .trim();\n    if (value === before) break;\n  }\n  return value;\n}\n\nfunction normalizeName(name) {\n  let value = foldAccents(String(name || ''))\n    .toLowerCase()\n    .replace(/[^\\w\\s]/g, ' ')\n    .replace(/\\s+/g, ' ')\n    .trim();\n  value = stripLegalSuffixes(value);\n  return value.replace(/\\s+/g, ' ').trim();\n}\n\nfunction normalizeLinkedinCompanyUrl(url) {\n  const s = String(url || '').trim().toLowerCase();\n  if (!s) return '';\n  try {\n    const withProto = s.includes('://') ? s : `https://${s}`;\n    const u = new URL(withProto);\n    if (!u.hostname.includes('linkedin.com')) return '';\n    const match = u.pathname.match(/\\/company\\/([^/?#]+)/i);\n    return match ? `linkedin.com/company/${match[1]}` : '';\n  } catch (_e) {\n    const match = s.match(/linkedin\\.com\\/company\\/([^/?#]+)/i);\n    return match ? `linkedin.com/company/${match[1]}` : '';\n  }\n}\n\nfunction extractDomain(value) {\n  const s = String(value || '').trim().toLowerCase();\n  if (!s) return '';\n  try {\n    const withProto = s.includes('://') ? s : `https://${s}`;\n    return new URL(withProto).hostname.replace(/^www\\./, '');\n  } catch (_e) {\n    const parts = s.split('@');\n    if (parts.length === 2) return parts[1].split('/')[0].replace(/^www\\./, '');\n    return s.replace(/^www\\./, '').split('/')[0];\n  }\n}\n\nfunction isSyncManagedRow(row) {\n  if (row.reason !== 'existing_customer') return false;\n  if (row.campaign_name && row.campaign_name !== '') return false;\n  if (row.active === false || row.active === 'false' || row.active === 0) return false;\n  const matchType = row.match_type || '';\n  const entityType = row.entity_type || '';\n  if (matchType === 'normalized_name' && entityType === 'company_name') return true;\n  if (matchType === 'domain' && entityType === 'company_domain') return true;\n  if (matchType === 'linkedin_url' && entityType === 'linkedin_company_url') return true;\n  if (matchType === 'exact' && entityType === 'company_document') return true;\n  return false;\n}\n\nfunction addIdentityToSets(sets, row) {\n  if (row.active === false || row.active === 'false' || row.active === 0) return;\n  if ((row.match_strength || 'strong') !== 'strong') return;\n  const type = row.identity_type || '';\n  const value = String(row.identity_value || '').trim();\n  if (!value) return;\n  if (type === 'legal_name' || type === 'brand_name' || type === 'alias') sets.names.add(normalizeName(value));\n  if (type === 'domain') {\n    const domain = extractDomain(value);\n    if (domain) sets.domains.add(domain);\n  }\n  if (type === 'linkedin_url') {\n    const linkedin = normalizeLinkedinCompanyUrl(value);\n    if (linkedin) sets.linkedinUrls.add(linkedin);\n  }\n}\n\nfunction buildSnapshot(suppressionRows, identityRows, accountId) {\n  const sets = { names: new Set(), domains: new Set(), linkedinUrls: new Set() };\n\n  for (const row of suppressionRows) {\n    if (!isSyncManagedRow(row)) continue;\n    const matchType = row.match_type || '';\n    const entityType = row.entity_type || '';\n    const value = String(row.entity_value || '').trim();\n    if (!value) continue;\n    if (matchType === 'normalized_name') sets.names.add(normalizeName(value));\n    else if (matchType === 'domain') {\n      const domain = extractDomain(value);\n      if (domain) sets.domains.add(domain);\n    } else if (matchType === 'linkedin_url') {\n      const linkedin = normalizeLinkedinCompanyUrl(value);\n      if (linkedin) sets.linkedinUrls.add(linkedin);\n    }\n  }\n\n  for (const row of identityRows || []) addIdentityToSets(sets, row);\n\n  return {\n    account_id: accountId,\n    customer_names: [...sets.names],\n    customer_domains: [...sets.domains],\n    customer_linkedin_urls: [...sets.linkedinUrls],\n    name_count: sets.names.size,\n    domain_count: sets.domains.size,\n    linkedin_count: sets.linkedinUrls.size,\n    source: 'pipedrive',\n    updated_at: new Date().toISOString(),\n  };\n}\n\nfunction chunkStringArray(items) {\n  const chunks = [];\n  let current = [];\n  for (const item of items) {\n    const candidate = [...current, item];\n    if (JSON.stringify(candidate).length > MAX_JSON_CHARS && current.length > 0) {\n      chunks.push(current);\n      current = [item];\n    } else {\n      current = candidate;\n    }\n  }\n  if (current.length) chunks.push(current);\n  return chunks;\n}\n\nfunction buildChunkRows(snapshot) {\n  const nameChunks = chunkStringArray(snapshot.customer_names);\n  const domainChunks = chunkStringArray(snapshot.customer_domains);\n  const linkedinChunks = chunkStringArray(snapshot.customer_linkedin_urls);\n  const chunkCount = Math.max(nameChunks.length, domainChunks.length, linkedinChunks.length, 1);\n  const rows = [];\n  for (let i = 0; i < chunkCount; i += 1) {\n    rows.push({\n      account_id: snapshot.account_id,\n      chunk_index: i,\n      customer_names_json: JSON.stringify(nameChunks[i] || []),\n      customer_domains_json: JSON.stringify(domainChunks[i] || []),\n      customer_linkedin_urls_json: JSON.stringify(linkedinChunks[i] || []),\n      source: snapshot.source,\n      name_count: snapshot.name_count,\n      domain_count: snapshot.domain_count,\n      linkedin_count: snapshot.linkedin_count,\n      updated_at: snapshot.updated_at,\n    });\n  }\n  return rows;\n}\n\nasync function deleteExistingChunks(context, baseUrl, tableId, accountId, headers) {\n  const existingResp = await context.helpers.httpRequest({\n    method: 'GET',\n    url: `${baseUrl}/api/v2/tables/${tableId}/records`,\n    qs: { where: `(account_id,eq,${accountId})`, limit: 100 },\n    headers: { 'xc-token': headers['xc-token'] },\n    json: true,\n  });\n  const existing = getRecords(existingResp);\n  if (!existing.length) return 0;\n  await context.helpers.httpRequest({\n    method: 'DELETE',\n    url: `${baseUrl}/api/v2/tables/${tableId}/records`,\n    headers,\n    body: existing.map(row => ({ Id: row.Id || row.id })),\n    json: true,\n  });\n  return existing.length;\n}\n\n// --- MAIN (n8n) ---\nconst cfg = $('config1').first().json;\nconst syncData = $('Sync Suppressions to NocoDB').first().json;\nconst accountId = cfg.qg_account_id;\nconst baseUrl = String(cfg.nocodb_base_url || '').replace(/\\/$/, '');\nconst suppressionTableId = cfg.nocodb_suppression_entities_table_id;\nconst identitiesTableId = cfg.nocodb_company_identities_table_id;\nconst snapshotTableId = cfg.nocodb_blocklist_snapshots_table_id;\nconst token = cfg.nocodb_api_token;\nconst headers = { 'xc-token': token, 'Content-Type': 'application/json' };\nconst pageSize = toPositiveInt(cfg.nocodb_page_size, 500);\nconst maxPages = toPositiveInt(cfg.snapshot_rebuild_max_pages, 40);\nconst where = `(account_id,eq,${accountId})~and(reason,eq,existing_customer)~and(active,eq,true)`;\n\nif (!snapshotTableId) throw new Error('nocodb_blocklist_snapshots_table_id is missing in config1');\n\nconst allRows = [];\nlet offset = 0;\nfor (let page = 0; page < maxPages; page += 1) {\n  const res = await this.helpers.httpRequest({\n    method: 'GET',\n    url: `${baseUrl}/api/v2/tables/${suppressionTableId}/records`,\n    qs: { where, limit: pageSize, offset },\n    headers: { 'xc-token': token },\n    json: true,\n  });\n  const batch = getRecords(res);\n  allRows.push(...batch);\n  if (batch.length < pageSize) break;\n  offset += pageSize;\n}\n\nlet identityRows = [];\nif (identitiesTableId) {\n  const idResp = await this.helpers.httpRequest({\n    method: 'GET',\n    url: `${baseUrl}/api/v2/tables/${identitiesTableId}/records`,\n    qs: { where: `(account_id,eq,${accountId})~and(active,eq,true)`, limit: 500 },\n    headers: { 'xc-token': token },\n    json: true,\n  });\n  identityRows = getRecords(idResp);\n}\n\nconst snapshot = buildSnapshot(allRows, identityRows, accountId);\nconst chunkRows = buildChunkRows(snapshot);\nconst deletedCount = await deleteExistingChunks(this, baseUrl, snapshotTableId, accountId, headers);\n\nlet insertedCount = 0;\nfor (const row of chunkRows) {\n  await this.helpers.httpRequest({\n    method: 'POST',\n    url: `${baseUrl}/api/v2/tables/${snapshotTableId}/records`,\n    headers,\n    body: row,\n    json: true,\n  });\n  insertedCount += 1;\n}\n\nreturn [{\n  json: {\n    snapshot_written: true,\n    account_id: accountId,\n    name_count: snapshot.name_count,\n    domain_count: snapshot.domain_count,\n    linkedin_count: snapshot.linkedin_count,\n    identity_rows_merged: identityRows.length,\n    chunk_count: chunkRows.length,\n    chunks_deleted: deletedCount,\n    chunks_inserted: insertedCount,\n    source_rows_scanned: allRows.length,\n    sync_complete: syncData.sync_complete === true,\n    completed_at: snapshot.updated_at,\n  },\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -200,
+        480
+      ],
+      "id": "write-snapshot-001",
+      "name": "Write Blocklist Snapshot"
+    }
+  ],
+  "connections": {
+    "Daily Schedule": {
+      "main": [
+        [
+          {
+            "node": "config1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "config1": {
+      "main": [
+        [
+          {
+            "node": "Fetch Pipedrive Customers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Pipedrive Customers": {
+      "main": [
+        [
+          {
+            "node": "Sync Suppressions to NocoDB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sync Suppressions to NocoDB": {
+      "main": [
+        [
+          {
+            "node": "Sync Still Running?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "More Pipedrive Pages?": {
+      "main": [
+        [
+          {
+            "node": "Fetch Pipedrive Customers",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Sync Still Running?": {
+      "main": [
+        [
+          {
+            "node": "Fetch Pipedrive Customers",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Write Blocklist Snapshot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "executionTimeout": 3600
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}
