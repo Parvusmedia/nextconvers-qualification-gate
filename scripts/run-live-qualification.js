@@ -14,6 +14,14 @@ const { findMatchingPatterns, containsAnyInFields, normalizeForMatch } = require
 const { evaluateSuppressions } = require('../n8n/code-nodes/lib/suppression-match');
 
 function loadToken() {
+  const localEnv = path.join(ROOT, 'config/deployment.local.env');
+  if (fs.existsSync(localEnv)) {
+    for (const line of fs.readFileSync(localEnv, 'utf8').split('\n')) {
+      if (line.startsWith('NOCODB_API_TOKEN=')) {
+        return line.split('=').slice(1).join('=').trim();
+      }
+    }
+  }
   if (process.env.NOCODB_API_TOKEN) return process.env.NOCODB_API_TOKEN.trim();
   const line = fs.readFileSync('/opt/apps/fly456bot/.env', 'utf8').split('\n').find(l => l.startsWith('NOCODB_API_TOKEN='));
   return line.split('=').slice(1).join('=').trim();

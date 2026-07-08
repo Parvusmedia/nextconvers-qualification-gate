@@ -2,3 +2,5 @@
 *.log
 .env
 .env.*
+config/deployment.local.env
+config/*.local.env

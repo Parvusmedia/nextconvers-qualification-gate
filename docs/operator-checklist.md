@@ -38,7 +38,7 @@ Re-provision: `NOCODB_BASE_ID=pgldlo34lezvu7e node scripts/provision-nocodb.js`
 | Step | Action |
 |------|--------|
 | 1 | Import [`n8n/workflows/qualification-gate-mvp.json`](../n8n/workflows/qualification-gate-mvp.json) |
-| 2 | Open `config1` → set `nocodb_api_token` (NocoDB token with write access) |
+| 2 | Open `config1` → set `nocodb_api_token` **or** run `node scripts/apply-deployment-secrets.js` after creating `config/deployment.local.env` |
 | 3 | Table IDs are **already set** in workflow JSON |
 | 4 | Activate workflow |
 | 5 | Webhook URL: `https://pmedia.app.n8n.cloud/webhook/qualification-gate-mvp` |

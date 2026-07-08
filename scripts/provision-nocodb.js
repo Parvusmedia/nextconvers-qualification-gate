@@ -23,6 +23,14 @@ function t(name) {
 }
 
 function loadToken() {
+  const localEnv = path.join(ROOT, 'config/deployment.local.env');
+  if (fs.existsSync(localEnv)) {
+    for (const line of fs.readFileSync(localEnv, 'utf8').split('\n')) {
+      if (line.startsWith('NOCODB_API_TOKEN=')) {
+        return line.split('=').slice(1).join('=').trim();
+      }
+    }
+  }
   if (process.env.NOCODB_API_TOKEN) return process.env.NOCODB_API_TOKEN.trim();
   const envPath = '/opt/apps/fly456bot/.env';
   if (fs.existsSync(envPath)) {
