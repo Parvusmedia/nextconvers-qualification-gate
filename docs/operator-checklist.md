@@ -14,16 +14,18 @@ Cursor completed the full MVP codebase locally. The steps below require **your c
 - [x] **Live integration test passed**: `node scripts/run-live-qualification.js` → `READY_FOR_CRM`, row Id 1
 - [x] Config written: [`config/deployment.generated.json`](../config/deployment.generated.json)
 
-### NocoDB table IDs (live)
+### NocoDB table IDs (live — base `pgldlo34lezvu7e`)
 
-| Table | ID |
-|-------|-----|
-| qg_clients | `m7o4my63fuqikeg` |
-| qg_campaign_policies | `mgihvzrry4yo0yi` |
-| qg_suppression_entities | `mq2uddkho8cyepg` |
-| qg_lead_decisions | `mikb7c7krp5kpfm` |
+| Resource | ID |
+|----------|-----|
+| **Base** | `pgldlo34lezvu7e` |
+| Vista placeholder (manual) | `vwsxislthqpv89xq` → tabla `m3ujhhptvtap9ww` (vacía, opcional borrar) |
+| `clients` | `morp0fiknmllfak` |
+| `campaign_policies` | `mat5yho3tk8cy20` |
+| `suppression_entities` | `m29pd9rqgfm3agu` |
+| `lead_decisions` | `mmx8selkfekojge` |
 
-Re-provision anytime: `node scripts/provision-nocodb.js`
+Re-provision: `NOCODB_BASE_ID=pgldlo34lezvu7e node scripts/provision-nocodb.js`
 
 ---
 

@@ -52,25 +52,31 @@
             {
               "id": "cfg-3",
               "name": "nocodb_clients_table_id",
-              "value": "m7o4my63fuqikeg",
+              "value": "morp0fiknmllfak",
               "type": "string"
             },
             {
               "id": "cfg-4",
               "name": "nocodb_campaign_policies_table_id",
-              "value": "mgihvzrry4yo0yi",
+              "value": "mat5yho3tk8cy20",
               "type": "string"
             },
             {
               "id": "cfg-5",
               "name": "nocodb_suppression_entities_table_id",
-              "value": "mq2uddkho8cyepg",
+              "value": "m29pd9rqgfm3agu",
               "type": "string"
             },
             {
               "id": "cfg-6",
               "name": "nocodb_lead_decisions_table_id",
-              "value": "mikb7c7krp5kpfm",
+              "value": "mmx8selkfekojge",
+              "type": "string"
+            },
+            {
+              "id": "cfg-base-id",
+              "name": "nocodb_base_id",
+              "value": "pgldlo34lezvu7e",
               "type": "string"
             }
           ]

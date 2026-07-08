@@ -2,8 +2,7 @@
 /**
  * Provision NocoDB tables + seed data for Qualification Gate.
  * Usage:
- *   NOCODB_API_TOKEN=xxx node scripts/provision-nocodb.js
- * Or reads from /opt/apps/fly456bot/.env if token not set.
+ *   NOCODB_BASE_ID=pgldlo34lezvu7e node scripts/provision-nocodb.js
  */
 const fs = require('fs');
 const path = require('path');
@@ -11,8 +10,17 @@ const https = require('https');
 
 const ROOT = path.join(__dirname, '..');
 const BASE_URL = (process.env.NOCODB_BASE_URL || 'https://mpa.parvusmedia.com').replace(/\/$/, '');
-const BASE_ID = process.env.NOCODB_BASE_ID || 'phh986hkgi1daju';
-const BASE_TITLE = 'Automation Platform (shared base)';
+const BASE_ID = process.env.NOCODB_BASE_ID || 'pgldlo34lezvu7e';
+const PREFIX = process.env.NOCODB_TABLE_PREFIX !== undefined
+  ? process.env.NOCODB_TABLE_PREFIX
+  : (BASE_ID === 'phh986hkgi1daju' ? 'qg_' : '');
+const BASE_TITLE = process.env.NOCODB_BASE_TITLE || (BASE_ID === 'pgldlo34lezvu7e'
+  ? 'Telefónica Seguros Qualification Gate'
+  : 'Automation Platform (shared base)');
+
+function t(name) {
+  return { title: `${PREFIX}${name}`, table_name: `${PREFIX}${name}` };
+}
 
 function loadToken() {
   if (process.env.NOCODB_API_TOKEN) return process.env.NOCODB_API_TOKEN.trim();
@@ -68,122 +76,99 @@ const col = {
   }),
 };
 
-const TABLES = [
-  {
-    title: 'qg_clients',
-    table_name: 'qg_clients',
-    columns: [
-      col.text('account_id'),
-      col.text('client_name'),
-      col.bool('active'),
-    ],
-  },
-  {
-    title: 'qg_campaign_policies',
-    table_name: 'qg_campaign_policies',
-    columns: [
-      col.text('account_id'),
-      col.text('campaign_name'),
-      col.text('product_name'),
-      col.select('motion_type', 'motion_type', ['final_client', 'broker_channel', 'partner', 'other']),
-      col.bool('active'),
-      col.long('target_description'),
-      col.long('allowed_countries'),
-      col.long('excluded_countries'),
-      col.long('allowed_industries'),
-      col.long('excluded_industries'),
-      col.long('target_roles'),
-      col.long('review_roles'),
-      col.long('excluded_roles'),
-      col.long('target_departments'),
-      col.long('excluded_departments'),
-      col.long('target_company_types'),
-      col.long('review_company_types'),
-      col.long('excluded_company_types'),
-      col.long('target_keywords'),
-      col.long('review_keywords'),
-      col.long('excluded_keywords'),
-      col.num('min_company_size'),
-      col.num('max_company_size'),
-      col.num('min_profile_score'),
-      col.num('min_company_score'),
-      col.num('ready_for_crm_profile_score'),
-      col.num('ready_for_crm_company_score'),
-      col.bool('review_if_profile_score_high_company_score_low'),
-      col.bool('require_no_suppression_match'),
-      col.bool('require_no_crm_duplicate'),
-      col.bool('require_no_existing_customer'),
-      col.bool('require_no_competitor'),
-      col.num('auto_ready_threshold'),
-      col.num('review_threshold'),
-      col.long('policy_notes'),
-    ],
-  },
-  {
-    title: 'qg_suppression_entities',
-    table_name: 'qg_suppression_entities',
-    columns: [
-      col.text('account_id'),
-      col.text('campaign_name'),
-      col.select('entity_type', 'entity_type', ['company_name', 'company_domain', 'linkedin_company_url', 'person_linkedin_url', 'profile_id', 'headline_keyword', 'title_keyword', 'company_industry', 'company_type', 'email_domain']),
-      col.text('entity_value'),
-      col.select('match_type', 'match_type', ['exact', 'contains', 'domain', 'linkedin_url', 'normalized_name']),
-      col.select('reason', 'reason', ['existing_customer', 'competitor', 'partner', 'provider', 'employee', 'not_icp', 'blocked_manually']),
-      col.select('severity', 'severity', ['reject', 'review']),
-      col.bool('active'),
-    ],
-  },
-  {
-    title: 'qg_lead_decisions',
-    table_name: 'qg_lead_decisions',
-    columns: [
-      col.text('account_id'), col.text('campaign_name'), col.text('product_name'), col.text('motion_type'),
-      col.num('source_row_id'), col.text('profile_id'), col.text('public_identifier'),
-      col.text('linkedin_url'), col.text('profile_url'), col.text('name'), col.text('first_name'), col.text('last_name'),
-      col.long('headline'), col.text('country_code'), col.text('country'), col.text('state'), col.text('city'), col.text('location'),
-      col.text('company_name'), col.long('company_linkedin_url'), col.text('company_industry'),
-      col.text('current_position'), col.long('current_company_description'), col.long('summary'), col.long('quick_summary'),
-      col.num('connections_count'), col.num('follower_count'), col.long('skills_text'), col.long('top_skills_text'),
-      col.text('react_type'), col.num('reacts_count'), col.num('reacted_posts_count'), col.long('post_url'),
-      col.num('profile_score'), col.long('profile_score_summary'), col.num('company_score'), col.long('company_score_summary'),
-      col.num('current_company_employee_count'), col.text('current_company_headquarter_city'),
-      col.text('current_company_headquarter_country'), col.text('current_company_headquarter_region'),
-      col.text('email_enriched'),
-      col.select('qualification_status', 'qualification_status', ['READY_FOR_CRM', 'READY_FOR_REVIEW', 'REJECTED', 'SUPPRESSED']),
-      col.num('qualification_confidence'), col.long('decision_reason'), col.long('reject_reason'), col.long('review_reason'),
-      col.long('suppression_matches'), col.long('risk_flags'), col.long('positive_signals'),
-      col.select('crm_sync_status', 'crm_sync_status', ['pending', 'blocked', 'review', 'not_synced']),
-      col.long('raw_payload'),
-    ],
-  },
-  {
-    title: 'qg_feedback_events',
-    table_name: 'qg_feedback_events',
-    columns: [
-      col.num('lead_decision_id'), col.text('account_id'), col.text('campaign_name'),
-      col.select('user_action', 'user_action', ['approve_for_crm', 'reject', 'reject_existing_customer', 'reject_competitor', 'reject_wrong_icp', 'reject_broker', 'reject_final_client', 'block_company', 'block_person', 'mark_as_customer', 'mark_as_competitor']),
-      col.text('feedback_reason'), col.long('notes'),
-    ],
-  },
-  {
-    title: 'qg_learned_rules',
-    table_name: 'qg_learned_rules',
-    columns: [
-      col.text('account_id'), col.text('campaign_name'), col.text('rule_type'), col.long('pattern'),
-      col.select('decision', 'decision', ['READY_FOR_CRM', 'READY_FOR_REVIEW', 'REJECTED', 'SUPPRESSED']),
-      col.num('confidence'), col.bool('active'), col.num('created_from_feedback_count'),
-    ],
-  },
-  {
-    title: 'qg_conversation_control',
-    table_name: 'qg_conversation_control',
-    columns: [
-      col.text('account_id'), col.long('linkedin_url'), col.text('conversation_owner'), col.bool('automation_lock'),
-      col.text('last_outbound_tool'), col.long('last_inbound_message'), col.long('last_outbound_message'),
-      col.text('reply_intent'), col.num('interest_score'), col.bool('handoff_required'), col.text('next_action'),
-    ],
-  },
-];
+function buildTables() {
+  return [
+    {
+      ...t('clients'),
+      columns: [col.text('account_id'), col.text('client_name'), col.bool('active')],
+    },
+    {
+      ...t('campaign_policies'),
+      columns: [
+        col.text('account_id'), col.text('campaign_name'), col.text('product_name'),
+        col.select('motion_type', 'motion_type', ['final_client', 'broker_channel', 'partner', 'other']),
+        col.bool('active'), col.long('target_description'),
+        col.long('allowed_countries'), col.long('excluded_countries'),
+        col.long('allowed_industries'), col.long('excluded_industries'),
+        col.long('target_roles'), col.long('review_roles'), col.long('excluded_roles'),
+        col.long('target_departments'), col.long('excluded_departments'),
+        col.long('target_company_types'), col.long('review_company_types'), col.long('excluded_company_types'),
+        col.long('target_keywords'), col.long('review_keywords'), col.long('excluded_keywords'),
+        col.num('min_company_size'), col.num('max_company_size'),
+        col.num('min_profile_score'), col.num('min_company_score'),
+        col.num('ready_for_crm_profile_score'), col.num('ready_for_crm_company_score'),
+        col.bool('review_if_profile_score_high_company_score_low'),
+        col.bool('require_no_suppression_match'), col.bool('require_no_crm_duplicate'),
+        col.bool('require_no_existing_customer'), col.bool('require_no_competitor'),
+        col.num('auto_ready_threshold'), col.num('review_threshold'), col.long('policy_notes'),
+      ],
+    },
+    {
+      ...t('suppression_entities'),
+      columns: [
+        col.text('account_id'), col.text('campaign_name'),
+        col.select('entity_type', 'entity_type', ['company_name', 'company_domain', 'linkedin_company_url', 'person_linkedin_url', 'profile_id', 'headline_keyword', 'title_keyword', 'company_industry', 'company_type', 'email_domain']),
+        col.text('entity_value'),
+        col.select('match_type', 'match_type', ['exact', 'contains', 'domain', 'linkedin_url', 'normalized_name']),
+        col.select('reason', 'reason', ['existing_customer', 'competitor', 'partner', 'provider', 'employee', 'not_icp', 'blocked_manually']),
+        col.select('severity', 'severity', ['reject', 'review']), col.bool('active'),
+      ],
+    },
+    {
+      ...t('lead_decisions'),
+      columns: [
+        col.text('account_id'), col.text('campaign_name'), col.text('product_name'), col.text('motion_type'),
+        col.num('source_row_id'), col.text('profile_id'), col.text('public_identifier'),
+        col.text('linkedin_url'), col.text('profile_url'), col.text('name'), col.text('first_name'), col.text('last_name'),
+        col.long('headline'), col.text('country_code'), col.text('country'), col.text('state'), col.text('city'), col.text('location'),
+        col.text('company_name'), col.long('company_linkedin_url'), col.text('company_industry'),
+        col.text('current_position'), col.long('current_company_description'), col.long('summary'), col.long('quick_summary'),
+        col.num('connections_count'), col.num('follower_count'), col.long('skills_text'), col.long('top_skills_text'),
+        col.text('react_type'), col.num('reacts_count'), col.num('reacted_posts_count'), col.long('post_url'),
+        col.num('profile_score'), col.long('profile_score_summary'), col.num('company_score'), col.long('company_score_summary'),
+        col.num('current_company_employee_count'), col.text('current_company_headquarter_city'),
+        col.text('current_company_headquarter_country'), col.text('current_company_headquarter_region'),
+        col.text('email_enriched'),
+        col.select('qualification_status', 'qualification_status', ['READY_FOR_CRM', 'READY_FOR_REVIEW', 'REJECTED', 'SUPPRESSED']),
+        col.num('qualification_confidence'), col.long('decision_reason'), col.long('reject_reason'), col.long('review_reason'),
+        col.long('suppression_matches'), col.long('risk_flags'), col.long('positive_signals'),
+        col.select('crm_sync_status', 'crm_sync_status', ['pending', 'blocked', 'review', 'not_synced']),
+        col.long('raw_payload'),
+      ],
+    },
+    {
+      ...t('feedback_events'),
+      columns: [
+        col.num('lead_decision_id'), col.text('account_id'), col.text('campaign_name'),
+        col.select('user_action', 'user_action', ['approve_for_crm', 'reject', 'reject_existing_customer', 'reject_competitor', 'reject_wrong_icp', 'reject_broker', 'reject_final_client', 'block_company', 'block_person', 'mark_as_customer', 'mark_as_competitor']),
+        col.text('feedback_reason'), col.long('notes'),
+      ],
+    },
+    {
+      ...t('learned_rules'),
+      columns: [
+        col.text('account_id'), col.text('campaign_name'), col.text('rule_type'), col.long('pattern'),
+        col.select('decision', 'decision', ['READY_FOR_CRM', 'READY_FOR_REVIEW', 'REJECTED', 'SUPPRESSED']),
+        col.num('confidence'), col.bool('active'), col.num('created_from_feedback_count'),
+      ],
+    },
+    {
+      ...t('conversation_control'),
+      columns: [
+        col.text('account_id'), col.long('linkedin_url'), col.text('conversation_owner'), col.bool('automation_lock'),
+        col.text('last_outbound_tool'), col.long('last_inbound_message'), col.long('last_outbound_message'),
+        col.text('reply_intent'), col.num('interest_score'), col.bool('handoff_required'), col.text('next_action'),
+      ],
+    },
+  ];
+}
+
+const TABLE_KEYS = {
+  clients: () => t('clients').title,
+  campaign_policies: () => t('campaign_policies').title,
+  suppression_entities: () => t('suppression_entities').title,
+  lead_decisions: () => t('lead_decisions').title,
+};
 
 async function listTables() {
   const resp = await request('GET', `/api/v2/meta/bases/${BASE_ID}/tables`);
@@ -197,15 +182,9 @@ async function createTable(def) {
 async function insertRecords(tableId, rows) {
   const results = [];
   for (const row of rows) {
-    const resp = await request('POST', `/api/v2/tables/${tableId}/records`, row);
-    results.push(resp);
+    results.push(await request('POST', `/api/v2/tables/${tableId}/records`, row));
   }
   return results;
-}
-
-function jsonArrayField(obj, key) {
-  const val = obj[key];
-  return Array.isArray(val) ? JSON.stringify(val) : val;
 }
 
 function policyToRow(policy) {
@@ -218,11 +197,13 @@ function policyToRow(policy) {
 }
 
 async function main() {
+  const TABLES = buildTables();
   console.log(`Provisioning Qualification Gate on ${BASE_URL}`);
-  console.log(`Base: ${BASE_ID} (${BASE_TITLE})\n`);
+  console.log(`Base: ${BASE_ID} (${BASE_TITLE})`);
+  console.log(`Table prefix: "${PREFIX}"\n`);
 
   const existing = await listTables();
-  const byTitle = Object.fromEntries(existing.map(t => [t.title, t]));
+  const byTitle = Object.fromEntries(existing.map(tbl => [tbl.title, tbl]));
 
   const tableIds = {};
   for (const def of TABLES) {
@@ -237,13 +218,14 @@ async function main() {
   }
 
   const accountId = process.env.QG_ACCOUNT_ID || 'rq1lQcYTToC9hlWD4vO94g';
+  const clientsTable = tableIds[TABLE_KEYS.clients()];
+  const policiesTable = tableIds[TABLE_KEYS.campaign_policies()];
+  const suppressionsTable = tableIds[TABLE_KEYS.suppression_entities()];
 
-  const clients = await request('GET', `/api/v2/tables/${tableIds.qg_clients}/records?where=(account_id,eq,${accountId})&limit=1`);
+  const clients = await request('GET', `/api/v2/tables/${clientsTable}/records?where=(account_id,eq,${accountId})&limit=1`);
   if (!(clients.list || []).length) {
-    await insertRecords(tableIds.qg_clients, [{ account_id: accountId, client_name: 'Telefónica (example)', active: true }]);
-    console.log('+ seeded: qg_clients');
-  } else {
-    console.log('✓ qg_clients already has account row');
+    await insertRecords(clientsTable, [{ account_id: accountId, client_name: 'Telefónica (example)', active: true }]);
+    console.log('+ seeded: clients');
   }
 
   const policies = [
@@ -252,12 +234,10 @@ async function main() {
   ].map(p => ({ ...p, account_id: accountId }));
 
   for (const policy of policies) {
-    const check = await request('GET', `/api/v2/tables/${tableIds.qg_campaign_policies}/records?where=(account_id,eq,${accountId})~and(campaign_name,eq,${encodeURIComponent(policy.campaign_name)})&limit=1`);
+    const check = await request('GET', `/api/v2/tables/${policiesTable}/records?where=(account_id,eq,${accountId})~and(campaign_name,eq,${encodeURIComponent(policy.campaign_name)})&limit=1`);
     if (!(check.list || []).length) {
-      await insertRecords(tableIds.qg_campaign_policies, [policy]);
+      await insertRecords(policiesTable, [policy]);
       console.log(`+ seeded policy: ${policy.campaign_name}`);
-    } else {
-      console.log(`✓ policy exists: ${policy.campaign_name}`);
     }
   }
 
@@ -268,33 +248,34 @@ async function main() {
   ];
 
   for (const s of suppressions) {
-    const check = await request('GET', `/api/v2/tables/${tableIds.qg_suppression_entities}/records?where=(account_id,eq,${accountId})~and(entity_value,eq,${encodeURIComponent(s.entity_value)})&limit=1`);
+    const check = await request('GET', `/api/v2/tables/${suppressionsTable}/records?where=(account_id,eq,${accountId})~and(entity_value,eq,${encodeURIComponent(s.entity_value)})&limit=1`);
     if (!(check.list || []).length) {
-      await insertRecords(tableIds.qg_suppression_entities, [s]);
+      await insertRecords(suppressionsTable, [s]);
       console.log(`+ seeded suppression: ${s.entity_value}`);
-    } else {
-      console.log(`✓ suppression exists: ${s.entity_value}`);
     }
   }
 
   const deployment = {
     nocodb_base_url: BASE_URL,
     nocodb_base_id: BASE_ID,
-    nocodb_base_note: 'Tables provisioned in automation base (token cannot create new base). Prefix qg_ for isolation.',
-    nocodb_clients_table_id: tableIds.qg_clients,
-    nocodb_campaign_policies_table_id: tableIds.qg_campaign_policies,
-    nocodb_suppression_entities_table_id: tableIds.qg_suppression_entities,
-    nocodb_lead_decisions_table_id: tableIds.qg_lead_decisions,
+    nocodb_legacy_table_id: 'm3ujhhptvtap9ww',
+    nocodb_legacy_view_id: 'vwsxislthqpv89xq',
+    nocodb_legacy_table_note: 'Empty placeholder table created manually; safe to delete from UI',
+    nocodb_clients_table_id: tableIds[TABLE_KEYS.clients()],
+    nocodb_campaign_policies_table_id: tableIds[TABLE_KEYS.campaign_policies()],
+    nocodb_suppression_entities_table_id: tableIds[TABLE_KEYS.suppression_entities()],
+    nocodb_lead_decisions_table_id: tableIds[TABLE_KEYS.lead_decisions()],
+    nocodb_feedback_events_table_id: tableIds[t('feedback_events').title],
+    nocodb_learned_rules_table_id: tableIds[t('learned_rules').title],
+    nocodb_conversation_control_table_id: tableIds[t('conversation_control').title],
     qg_account_id: accountId,
     generated_at: new Date().toISOString(),
   };
 
-  const outPath = path.join(ROOT, 'config/deployment.generated.json');
-  fs.writeFileSync(outPath, JSON.stringify(deployment, null, 2));
-  console.log(`\nWrote ${outPath}`);
-  console.log('\nconfig1 values for n8n:');
+  fs.writeFileSync(path.join(ROOT, 'config/deployment.generated.json'), JSON.stringify(deployment, null, 2));
+  console.log('\nWrote config/deployment.generated.json');
   console.log(JSON.stringify({
-    nocodb_base_url: deployment.nocodb_base_url,
+    nocodb_base_id: deployment.nocodb_base_id,
     nocodb_campaign_policies_table_id: deployment.nocodb_campaign_policies_table_id,
     nocodb_suppression_entities_table_id: deployment.nocodb_suppression_entities_table_id,
     nocodb_lead_decisions_table_id: deployment.nocodb_lead_decisions_table_id,
