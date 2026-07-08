@@ -9,7 +9,7 @@ Cursor completed the full MVP codebase locally. The steps below require **your c
 - [x] n8n workflow JSON + code nodes (table IDs patched from live deploy)
 - [x] Sample payload + expected decisions
 - [x] Local smoke test: `node scripts/run-local-qualification-test.js`
-- [x] **NocoDB provisioned** on `mpa.parvusmedia.com` (base `phh986hkgi1daju`, tables `qg_*`)
+- [x] **NocoDB provisioned** on base `pgldlo34lezvu7e` (dedicated Telefónica Seguros base)
 - [x] **Seed data loaded** (Telefónica example policies + suppressions)
 - [x] **Live integration test passed**: `node scripts/run-live-qualification.js` → `READY_FOR_CRM`, row Id 1
 - [x] Config written: [`config/deployment.generated.json`](../config/deployment.generated.json)
@@ -52,19 +52,7 @@ Re-provision: `NOCODB_BASE_ID=pgldlo34lezvu7e node scripts/provision-nocodb.js`
 | 2 | Trigger when `profile_score > 3` |
 | 3 | Ensure `account_id` in payload matches seeded value (`rq1lQcYTToC9hlWD4vO94g` or update seed) |
 
-### 3. NocoDB — optional: dedicated base
-
-Tables were created in the **automation base** (`phh986hkgi1daju`) with `qg_` prefix because the API token cannot create new bases. To move to a dedicated base later, create base in NocoDB UI and re-run provision with `NOCODB_BASE_ID=...`.
-
----
-
-## Removed / completed (was blocking)
-
-~~NocoDB create base and tables~~ — done via `scripts/provision-nocodb.js`  
-~~Load Telefónica seed~~ — done  
-~~End-to-end NocoDB test~~ — done via `scripts/run-live-qualification.js`
-
-### 5. Git remote (optional)
+### 3. Git remote (optional)
 
 **On this VPS:** `git push` is preconfigured for this repo via local `core.sshCommand` (org key). Use:
 
