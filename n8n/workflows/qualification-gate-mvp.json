@@ -1,0 +1,453 @@
+{
+  "name": "NextConvers Qualification Gate - MVP",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "qualification-gate-mvp",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -1200,
+        300
+      ],
+      "id": "webhook-001",
+      "name": "Webhook",
+      "webhookId": "qualification-gate-mvp"
+    },
+    {
+      "parameters": {
+        "content": "## Configuration\n\nEdit **only** `config1`:\n- `nocodb_base_url`, `nocodb_api_token`\n- Table IDs for campaign_policies, suppression_entities, lead_decisions\n\nNever edit qualification logic in code nodes — change NocoDB config instead.",
+        "height": 280,
+        "width": 420
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1240,
+        20
+      ],
+      "id": "sticky-config",
+      "name": "Sticky Note Config"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "cfg-1",
+              "name": "nocodb_base_url",
+              "value": "https://mpa.parvusmedia.com",
+              "type": "string"
+            },
+            {
+              "id": "cfg-2",
+              "name": "nocodb_api_token",
+              "value": "REPLACE_WITH_NOCODB_API_TOKEN",
+              "type": "string"
+            },
+            {
+              "id": "cfg-3",
+              "name": "nocodb_clients_table_id",
+              "value": "REPLACE_CLIENTS_TABLE_ID",
+              "type": "string"
+            },
+            {
+              "id": "cfg-4",
+              "name": "nocodb_campaign_policies_table_id",
+              "value": "REPLACE_CAMPAIGN_POLICIES_TABLE_ID",
+              "type": "string"
+            },
+            {
+              "id": "cfg-5",
+              "name": "nocodb_suppression_entities_table_id",
+              "value": "REPLACE_SUPPRESSION_ENTITIES_TABLE_ID",
+              "type": "string"
+            },
+            {
+              "id": "cfg-6",
+              "name": "nocodb_lead_decisions_table_id",
+              "value": "REPLACE_LEAD_DECISIONS_TABLE_ID",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -960,
+        300
+      ],
+      "id": "config1-001",
+      "name": "config1"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ======================================================\n// n8n Code Node - Normalize NextConvers Lead Payload\n// Mode: Run Once for All Items\n// Input: Webhook item with json.body\n// Output: one normalized item per input item\n// ======================================================\n\nfunction cleanText(value) {\n  if (value === null || value === undefined) return '';\n  if (Array.isArray(value)) {\n    value = value.map(v => cleanText(v)).filter(Boolean).join(', ');\n  }\n  return String(value)\n    .replace(/\\r?\\n|\\r/g, ' ')\n    .replace(/\\t/g, ' ')\n    .replace(/\\s+/g, ' ')\n    .trim();\n}\n\nfunction toNumber(value, fallback = 0) {\n  if (value === null || value === undefined || value === '') return fallback;\n  const num = Number(String(value).replace(/[^\\d.-]/g, ''));\n  return Number.isFinite(num) ? num : fallback;\n}\n\nfunction safeJsonParse(value) {\n  if (!value) return {};\n  if (typeof value === 'object') return value;\n  try {\n    return JSON.parse(value);\n  } catch (_e) {\n    return {};\n  }\n}\n\nfunction getFirstName(fullName, fallback = '') {\n  const name = cleanText(fullName);\n  if (!name) return fallback;\n  return name.split(' ')[0] || fallback;\n}\n\nfunction getLastName(fullName) {\n  const name = cleanText(fullName);\n  const parts = name.split(' ').filter(Boolean);\n  if (parts.length <= 1) return '';\n  return parts.slice(1).join(' ');\n}\n\nfunction normalizeLinkedinProfileUrl(url, publicIdentifier, profileId) {\n  const cleanUrl = cleanText(url);\n  if (cleanUrl.includes('/in/')) {\n    return cleanUrl.split('?')[0].replace(/\\/$/, '');\n  }\n  if (publicIdentifier) {\n    return `https://www.linkedin.com/in/${publicIdentifier}`;\n  }\n  if (profileId) {\n    return `https://www.linkedin.com/in/${profileId}`;\n  }\n  return cleanUrl;\n}\n\nfunction extractSkills(body, profileJson) {\n  const skills = [];\n  Object.keys(body || {}).forEach(key => {\n    if (/^skills_\\d+$/.test(key) && body[key]) {\n      skills.push(cleanText(body[key]));\n    }\n  });\n  if (Array.isArray(profileJson.topSkills)) {\n    profileJson.topSkills.forEach(skill => {\n      if (skill) skills.push(cleanText(skill));\n    });\n  }\n  if (Array.isArray(profileJson.skills)) {\n    profileJson.skills.forEach(skill => {\n      if (skill?.name) skills.push(cleanText(skill.name));\n    });\n  }\n  const parsedSkills = safeJsonParse(body.skills);\n  if (Array.isArray(parsedSkills)) {\n    parsedSkills.forEach(skill => {\n      if (typeof skill === 'string') skills.push(cleanText(skill));\n      else if (skill?.name) skills.push(cleanText(skill.name));\n    });\n  }\n  return [...new Set(skills.filter(Boolean))];\n}\n\nfunction getCurrentPosition(profileJson, body) {\n  if (Array.isArray(profileJson.currentPosition) && profileJson.currentPosition.length > 0) {\n    return profileJson.currentPosition[0];\n  }\n  if (Array.isArray(profileJson.experience) && profileJson.experience.length > 0) {\n    return profileJson.experience[0];\n  }\n  return {\n    position: cleanText(body.headline),\n    companyName: cleanText(body.company_name),\n    companyLinkedinUrl: cleanText(body.company_linkedin_url),\n    description: cleanText(body.current_company_description),\n  };\n}\n\nfunction normalizeReactedPosts(posts) {\n  const parsed = Array.isArray(posts) ? posts : safeJsonParse(posts);\n  if (!Array.isArray(parsed)) return [];\n  return parsed.map(post => ({\n    id: toNumber(post.id),\n    url: cleanText(post.url),\n    react_type: cleanText(post.react_type).toUpperCase(),\n    reacted_at: cleanText(post.reacted_at),\n  }));\n}\n\nreturn items.map(item => {\n  let raw = item.json || {};\n  try {\n    const webhookItem = $('Webhook').first();\n    if (webhookItem && webhookItem.json) {\n      raw = webhookItem.json;\n    }\n  } catch (_e) {\n    // Webhook node not in execution path; use current item\n  }\n  const body = raw.body || raw;\n\n  const profileJson = safeJsonParse(body.reduced_profile_json_content);\n  const currentPosition = getCurrentPosition(profileJson, body);\n\n  const publicIdentifier = cleanText(profileJson.publicIdentifier || body.public_identifier);\n  const profileId = cleanText(body.profile_id || profileJson.id);\n  const fullName = cleanText(body.name || `${profileJson.firstName || ''} ${profileJson.lastName || ''}`);\n  const firstName = cleanText(profileJson.firstName || body.first_name) || getFirstName(fullName);\n  const lastName = cleanText(profileJson.lastName || body.last_name) || getLastName(fullName);\n\n  const linkedinUrl = normalizeLinkedinProfileUrl(\n    body.profile_url || body.linkedin_url || profileJson.linkedinUrl,\n    publicIdentifier,\n    profileId\n  );\n\n  const locationParsed = profileJson.location?.parsed || {};\n  const locationText =\n    cleanText(locationParsed.text) ||\n    cleanText(profileJson.location?.linkedinText) ||\n    cleanText(body.location);\n\n  const companyName = cleanText(currentPosition.companyName || body.company_name);\n  const companyLinkedinUrl = cleanText(currentPosition.companyLinkedinUrl || body.company_linkedin_url);\n\n  const skills = extractSkills(body, profileJson);\n  const topSkillsRaw = body.top_skills || profileJson.topSkills;\n  const topSkillsParsed = Array.isArray(topSkillsRaw) ? topSkillsRaw : safeJsonParse(topSkillsRaw);\n  const topSkills = Array.isArray(topSkillsParsed)\n    ? topSkillsParsed.map(cleanText).filter(Boolean)\n    : [];\n\n  const reactedPosts = normalizeReactedPosts(body.reacted_posts);\n\n  const normalized = {\n    source_row_id: toNumber(body.id || body.source_row_id),\n    profile_id: profileId,\n    public_identifier: publicIdentifier,\n    linkedin_url: linkedinUrl,\n    profile_url: linkedinUrl,\n    name: fullName,\n    first_name: firstName,\n    last_name: lastName,\n    headline: cleanText(body.headline || profileJson.headline),\n    country_code: cleanText(body.country_code || locationParsed.countryCode || profileJson.location?.countryCode).toUpperCase(),\n    country: cleanText(body.country || locationParsed.country || locationParsed.countryFull),\n    state: cleanText(body.state || locationParsed.state),\n    city: cleanText(body.city || locationParsed.city),\n    location: locationText,\n    company_name: companyName,\n    company_linkedin_url: companyLinkedinUrl,\n    company_industry: cleanText(body.company_industry),\n    current_position: cleanText(currentPosition.position || body.current_position),\n    current_company_description: cleanText(\n      currentPosition.description || body.current_company_description || body.positions_1_description\n    ),\n    summary: cleanText(body.summary || profileJson.about),\n    quick_summary: cleanText(body.quick_summary || body.summary),\n    connections_count: toNumber(body.connections_count || profileJson.connectionsCount),\n    follower_count: toNumber(body.follower_count || profileJson.followerCount),\n    skills_text: skills.join(', '),\n    top_skills_text: topSkills.join(', '),\n    react_type: cleanText(body.react_type).toUpperCase(),\n    reacts_count: toNumber(body.reacts_count),\n    reacted_posts_count: reactedPosts.length,\n    post_url: cleanText(body.post_url),\n    profile_score: toNumber(body.profile_score),\n    profile_score_summary: cleanText(body.profile_score_summary),\n    company_score: toNumber(body.company_score),\n    company_score_summary: cleanText(body.company_score_Summary || body.company_score_summary),\n    campaign_name: cleanText(body.campaign_name),\n    account_id: cleanText(body.account_id),\n    current_company_employee_count: toNumber(body.current_company_employeeCount || body.current_company_employee_count),\n    current_company_headquarter_city: cleanText(body.current_company_headquarter_city),\n    current_company_headquarter_country: cleanText(body.current_company_headquarter_country),\n    current_company_headquarter_region: cleanText(body.current_company_headquarter_geographicArea || body.current_company_headquarter_region),\n    email_enriched: cleanText(body.email_enriched || body.email),\n    raw_payload: JSON.stringify(body),\n  };\n\n  return { json: normalized };\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -720,
+        300
+      ],
+      "id": "normalize-lead-001",
+      "name": "Normalize Lead"
+    },
+    {
+      "parameters": {
+        "url": "={{ $('config1').first().json.nocodb_base_url.replace(/\\/$/, '') }}/api/v2/tables/{{ $('config1').first().json.nocodb_campaign_policies_table_id }}/records",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "where",
+              "value": "=(account_id,eq,{{ $json.account_id }})~and(campaign_name,eq,{{ $json.campaign_name }})~and(active,eq,true)"
+            },
+            {
+              "name": "limit",
+              "value": "1"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "xc-token",
+              "value": "={{ $('config1').first().json.nocodb_api_token }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -480,
+        300
+      ],
+      "id": "load-policy-001",
+      "name": "Load Campaign Policy"
+    },
+    {
+      "parameters": {
+        "url": "={{ $('config1').first().json.nocodb_base_url.replace(/\\/$/, '') }}/api/v2/tables/{{ $('config1').first().json.nocodb_campaign_policies_table_id }}/records",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "where",
+              "value": "=(account_id,eq,{{ $('Normalize Lead').first().json.account_id }})~and(campaign_name,eq,__default__)~and(active,eq,true)"
+            },
+            {
+              "name": "limit",
+              "value": "1"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "xc-token",
+              "value": "={{ $('config1').first().json.nocodb_api_token }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -240,
+        300
+      ],
+      "id": "load-default-policy-001",
+      "name": "Load Default Policy"
+    },
+    {
+      "parameters": {
+        "url": "={{ $('config1').first().json.nocodb_base_url.replace(/\\/$/, '') }}/api/v2/tables/{{ $('config1').first().json.nocodb_suppression_entities_table_id }}/records",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "where",
+              "value": "=(account_id,eq,{{ $('Normalize Lead').first().json.account_id }})~and(active,eq,true)"
+            },
+            {
+              "name": "limit",
+              "value": "100"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "xc-token",
+              "value": "={{ $('config1').first().json.nocodb_api_token }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        0,
+        300
+      ],
+      "id": "load-suppressions-001",
+      "name": "Load Suppressions"
+    },
+    {
+      "parameters": {
+        "url": "={{ $('config1').first().json.nocodb_base_url.replace(/\\/$/, '') }}/api/v2/tables/{{ $('config1').first().json.nocodb_lead_decisions_table_id }}/records",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "where",
+              "value": "=(source_row_id,eq,{{ $('Normalize Lead').first().json.source_row_id }})~and(campaign_name,eq,{{ $('Normalize Lead').first().json.campaign_name }})"
+            },
+            {
+              "name": "limit",
+              "value": "1"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "xc-token",
+              "value": "={{ $('config1').first().json.nocodb_api_token }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        240,
+        300
+      ],
+      "id": "idempotency-001",
+      "name": "Idempotency Lookup"
+    },
+    {
+      "parameters": {
+        "jsCode": "const lead = $('Normalize Lead').first().json;\nconst policyExact = $('Load Campaign Policy').first().json;\nconst policyDefault = $('Load Default Policy').first().json;\nconst suppressionsResp = $('Load Suppressions').first().json;\nconst idempotencyResp = $('Idempotency Lookup').first().json;\nfunction getRecords(resp) {\n  if (!resp) return [];\n  if (Array.isArray(resp.list)) return resp.list;\n  if (Array.isArray(resp.records)) return resp.records;\n  if (Array.isArray(resp)) return resp;\n  return [];\n}\nconst exactRecords = getRecords(policyExact);\nconst defaultRecords = getRecords(policyDefault);\nconst policy = exactRecords[0] || defaultRecords[0] || null;\nconst suppressionRecords = getRecords(suppressionsResp);\nconst campaignName = lead.campaign_name || '';\nconst filteredSuppressions = suppressionRecords.filter(s => {\n  if (s.active === false || s.active === 'false' || s.active === 0) return false;\n  if (!s.campaign_name || s.campaign_name === '') return true;\n  return s.campaign_name === campaignName;\n});\nconst existingRecords = getRecords(idempotencyResp);\nconst existing = existingRecords[0] || null;\nreturn [{ json: { lead, policy, suppressions: filteredSuppressions, existing_decision_id: existing ? existing.id : null } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        300
+      ],
+      "id": "merge-context-001",
+      "name": "Merge Context"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ======================================================\n// n8n Code Node - Evaluate Hard Rules (config-driven)\n// Mode: Run Once for All Items\n// Input: lead, policy (parsed), suppressions\n// Output: evaluation context object\n// ======================================================\n\n// --- lib/parse-config-array.js ---\nfunction parseConfigArray(value) {\n  if (value === null || value === undefined || value === '') return [];\n  if (Array.isArray(value)) return value.map(v => String(v).trim()).filter(Boolean);\n  const str = String(value).trim();\n  if (!str) return [];\n  if (str.startsWith('[')) {\n    try {\n      const parsed = JSON.parse(str);\n      if (Array.isArray(parsed)) return parsed.map(v => String(v).trim()).filter(Boolean);\n    } catch (_e) { /* fall through */ }\n  }\n  return str.split(/[,;\\n]/).map(s => s.trim()).filter(Boolean);\n}\n\n// --- lib/text-match.js ---\nfunction normalizeForMatch(text) {\n  return String(text || '').toLowerCase().replace(/\\s+/g, ' ').trim();\n}\n\nfunction containsAnyInFields(fields, patterns) {\n  if (!patterns || !patterns.length) return false;\n  const combined = fields.filter(Boolean).join(' ');\n  const h = normalizeForMatch(combined);\n  return patterns.some(p => h.includes(normalizeForMatch(p)));\n}\n\nfunction findMatchingPatterns(fields, patterns) {\n  const combined = fields.filter(Boolean).join(' ');\n  if (!combined || !patterns || !patterns.length) return [];\n  const h = normalizeForMatch(combined);\n  return patterns.filter(p => h.includes(normalizeForMatch(p)));\n}\n\n// --- lib/suppression-match.js ---\nfunction normalizeLinkedinUrl(url) {\n  const s = String(url || '').trim().toLowerCase();\n  if (!s) return '';\n  return s.split('?')[0].replace(/\\/$/, '');\n}\n\nfunction normalizeName(name) {\n  return String(name || '').toLowerCase().replace(/[^\\w\\s]/g, ' ').replace(/\\s+/g, ' ').trim();\n}\n\nfunction extractDomain(value) {\n  const s = String(value || '').trim().toLowerCase();\n  if (!s) return '';\n  try {\n    const withProto = s.includes('://') ? s : `https://${s}`;\n    return new URL(withProto).hostname.replace(/^www\\./, '');\n  } catch (_e) {\n    const parts = s.split('@');\n    if (parts.length === 2) return parts[1].split('/')[0].replace(/^www\\./, '');\n    return s.replace(/^www\\./, '').split('/')[0];\n  }\n}\n\nfunction getLeadFieldValue(lead, entityType) {\n  switch (entityType) {\n    case 'company_name': return lead.company_name || '';\n    case 'company_domain': return extractDomain(lead.company_linkedin_url || lead.email_enriched || '');\n    case 'linkedin_company_url': return lead.company_linkedin_url || '';\n    case 'person_linkedin_url': return lead.linkedin_url || lead.profile_url || '';\n    case 'profile_id': return lead.profile_id || '';\n    case 'headline_keyword': return lead.headline || '';\n    case 'title_keyword': return lead.current_position || lead.headline || '';\n    case 'company_industry': return lead.company_industry || '';\n    case 'company_type':\n      return [lead.company_industry, lead.current_company_description, lead.company_name].filter(Boolean).join(' ');\n    case 'email_domain': return extractDomain(lead.email_enriched || '');\n    default: return '';\n  }\n}\n\nfunction matchSuppression(lead, entity) {\n  const entityType = entity.entity_type || '';\n  const entityValue = entity.entity_value || '';\n  const matchType = entity.match_type || 'exact';\n  const leadValue = getLeadFieldValue(lead, entityType);\n  if (!entityValue || !leadValue) return false;\n\n  switch (matchType) {\n    case 'exact':\n      return normalizeForMatch(leadValue) === normalizeForMatch(entityValue);\n    case 'contains':\n      return normalizeForMatch(leadValue).includes(normalizeForMatch(entityValue));\n    case 'domain': {\n      const ld = extractDomain(leadValue);\n      const ed = extractDomain(entityValue);\n      return ld && ed && ld === ed;\n    }\n    case 'linkedin_url':\n      return normalizeLinkedinUrl(leadValue) === normalizeLinkedinUrl(entityValue);\n    case 'normalized_name':\n      return normalizeName(leadValue) === normalizeName(entityValue);\n    default:\n      return normalizeForMatch(leadValue) === normalizeForMatch(entityValue);\n  }\n}\n\nfunction evaluateSuppressions(lead, suppressions) {\n  const matches = [];\n  for (const entity of suppressions || []) {\n    if (entity.active === false || entity.active === 'false' || entity.active === 0) continue;\n    if (matchSuppression(lead, entity)) {\n      matches.push({\n        id: entity.id,\n        entity_type: entity.entity_type,\n        entity_value: entity.entity_value,\n        match_type: entity.match_type,\n        reason: entity.reason || '',\n        severity: entity.severity || 'reject',\n        campaign_name: entity.campaign_name || '',\n      });\n    }\n  }\n  return matches;\n}\n\n// --- Policy parsing ---\nfunction parsePolicy(policy) {\n  if (!policy || !policy.id) return null;\n  return {\n    ...policy,\n    allowed_countries: parseConfigArray(policy.allowed_countries),\n    excluded_countries: parseConfigArray(policy.excluded_countries),\n    allowed_industries: parseConfigArray(policy.allowed_industries),\n    excluded_industries: parseConfigArray(policy.excluded_industries),\n    target_roles: parseConfigArray(policy.target_roles),\n    review_roles: parseConfigArray(policy.review_roles),\n    excluded_roles: parseConfigArray(policy.excluded_roles),\n    target_departments: parseConfigArray(policy.target_departments),\n    excluded_departments: parseConfigArray(policy.excluded_departments),\n    target_company_types: parseConfigArray(policy.target_company_types),\n    review_company_types: parseConfigArray(policy.review_company_types),\n    excluded_company_types: parseConfigArray(policy.excluded_company_types),\n    target_keywords: parseConfigArray(policy.target_keywords),\n    review_keywords: parseConfigArray(policy.review_keywords),\n    excluded_keywords: parseConfigArray(policy.excluded_keywords),\n    min_profile_score: Number(policy.min_profile_score) || 0,\n    min_company_score: Number(policy.min_company_score) || 0,\n    min_company_size: Number(policy.min_company_size) || 0,\n    max_company_size: Number(policy.max_company_size) || 0,\n    ready_for_crm_profile_score: Number(policy.ready_for_crm_profile_score) || 4,\n    ready_for_crm_company_score: Number(policy.ready_for_crm_company_score) || 3,\n    auto_ready_threshold: Number(policy.auto_ready_threshold) || 1,\n    review_threshold: Number(policy.review_threshold) || 1,\n    review_if_profile_score_high_company_score_low:\n      policy.review_if_profile_score_high_company_score_low === true ||\n      policy.review_if_profile_score_high_company_score_low === 'true' ||\n      policy.review_if_profile_score_high_company_score_low === 1,\n    require_no_suppression_match:\n      policy.require_no_suppression_match === true ||\n      policy.require_no_suppression_match === 'true' ||\n      policy.require_no_suppression_match === 1,\n  };\n}\n\nfunction toBool(val) {\n  return val === true || val === 'true' || val === 1 || val === '1';\n}\n\nfunction evaluateHardRules(lead, rawPolicy, suppressions) {\n  const ctx = {\n    suppression_matches: [],\n    risk_flags: [],\n    positive_signals: [],\n    reject_reasons: [],\n    review_reasons: [],\n    hard_reject: false,\n    suppression_reject: false,\n    force_review: false,\n    policy_found: false,\n  };\n\n  const policy = parsePolicy(rawPolicy);\n  if (!policy) {\n    ctx.force_review = true;\n    ctx.review_reasons.push('No active policy found');\n    return ctx;\n  }\n  ctx.policy_found = true;\n\n  // Suppression check\n  ctx.suppression_matches = evaluateSuppressions(lead, suppressions);\n  const rejectMatches = ctx.suppression_matches.filter(m => m.severity === 'reject');\n  const reviewMatches = ctx.suppression_matches.filter(m => m.severity === 'review');\n\n  if (rejectMatches.length > 0) {\n    ctx.suppression_reject = true;\n    ctx.reject_reasons.push(`Suppression match: ${rejectMatches.map(m => m.reason || m.entity_value).join('; ')}`);\n    return ctx;\n  }\n\n  for (const m of reviewMatches) {\n    ctx.risk_flags.push(`Suppression review: ${m.reason || m.entity_value}`);\n  }\n\n  const roleFields = [lead.headline, lead.current_position];\n  const companyFields = [lead.company_industry, lead.current_company_description, lead.company_name, lead.summary];\n\n  // Score gates\n  if (policy.min_profile_score > 0 && lead.profile_score < policy.min_profile_score) {\n    ctx.hard_reject = true;\n    ctx.reject_reasons.push(`Profile score ${lead.profile_score} below minimum ${policy.min_profile_score}`);\n  }\n\n  if (policy.min_company_score > 0 && lead.company_score < policy.min_company_score) {\n    if (policy.review_if_profile_score_high_company_score_low &&\n        lead.profile_score >= policy.ready_for_crm_profile_score) {\n      ctx.review_reasons.push(`Company score ${lead.company_score} below minimum ${policy.min_company_score} but profile score is high`);\n    } else {\n      ctx.hard_reject = true;\n      ctx.reject_reasons.push(`Company score ${lead.company_score} below minimum ${policy.min_company_score}`);\n    }\n  }\n\n  if (policy.review_if_profile_score_high_company_score_low &&\n      lead.profile_score >= policy.ready_for_crm_profile_score &&\n      lead.company_score < policy.ready_for_crm_company_score) {\n    ctx.review_reasons.push(`High profile score (${lead.profile_score}) with low company score (${lead.company_score})`);\n  }\n\n  // Company size\n  if (policy.min_company_size > 0 && lead.current_company_employee_count > 0 &&\n      lead.current_company_employee_count < policy.min_company_size) {\n    ctx.hard_reject = true;\n    ctx.reject_reasons.push(`Company size ${lead.current_company_employee_count} below minimum ${policy.min_company_size}`);\n  }\n\n  if (policy.max_company_size > 0 && lead.current_company_employee_count > policy.max_company_size) {\n    ctx.review_reasons.push(`Company size ${lead.current_company_employee_count} above maximum ${policy.max_company_size}`);\n  }\n\n  // Geography\n  const country = normalizeForMatch(lead.country_code || lead.country);\n  if (policy.excluded_countries.length && policy.excluded_countries.some(c => normalizeForMatch(c) === country || normalizeForMatch(c) === normalizeForMatch(lead.country))) {\n    ctx.hard_reject = true;\n    ctx.reject_reasons.push(`Country ${lead.country || lead.country_code} is excluded`);\n  }\n\n  if (policy.allowed_countries.length) {\n    const allowed = policy.allowed_countries.some(c => {\n      const nc = normalizeForMatch(c);\n      return nc === country || nc === normalizeForMatch(lead.country);\n    });\n    if (!allowed) {\n      ctx.review_reasons.push(`Country ${lead.country || lead.country_code} not in allowed list`);\n    }\n  }\n\n  // Industry\n  if (policy.excluded_industries.length && containsAnyInFields([lead.company_industry], policy.excluded_industries)) {\n    ctx.hard_reject = true;\n    ctx.reject_reasons.push(`Industry ${lead.company_industry} is excluded`);\n  }\n\n  if (policy.allowed_industries.length && lead.company_industry &&\n      !containsAnyInFields([lead.company_industry], policy.allowed_industries)) {\n    ctx.review_reasons.push(`Industry ${lead.company_industry} not in allowed list`);\n  }\n\n  // Roles and keywords\n  const excludedRoleHits = findMatchingPatterns(roleFields, policy.excluded_roles);\n  if (excludedRoleHits.length) {\n    ctx.hard_reject = true;\n    ctx.reject_reasons.push(`Excluded role match: ${excludedRoleHits.join(', ')}`);\n  }\n\n  const excludedKeywordHits = findMatchingPatterns([...roleFields, ...companyFields], policy.excluded_keywords);\n  if (excludedKeywordHits.length) {\n    ctx.hard_reject = true;\n    ctx.reject_reasons.push(`Excluded keyword match: ${excludedKeywordHits.join(', ')}`);\n  }\n\n  const reviewRoleHits = findMatchingPatterns(roleFields, policy.review_roles);\n  if (reviewRoleHits.length) {\n    ctx.review_reasons.push(`Review role match: ${reviewRoleHits.join(', ')}`);\n  }\n\n  const reviewKeywordHits = findMatchingPatterns([...roleFields, ...companyFields], policy.review_keywords);\n  if (reviewKeywordHits.length) {\n    ctx.review_reasons.push(`Review keyword match: ${reviewKeywordHits.join(', ')}`);\n  }\n\n  const targetRoleHits = findMatchingPatterns(roleFields, policy.target_roles);\n  if (targetRoleHits.length) {\n    ctx.positive_signals.push(`Target role match: ${targetRoleHits.join(', ')}`);\n  }\n\n  const targetKeywordHits = findMatchingPatterns([...roleFields, ...companyFields], policy.target_keywords);\n  if (targetKeywordHits.length) {\n    ctx.positive_signals.push(`Target keyword match: ${targetKeywordHits.join(', ')}`);\n  }\n\n  // Company types\n  const excludedCompanyTypeHits = findMatchingPatterns(companyFields, policy.excluded_company_types);\n  if (excludedCompanyTypeHits.length) {\n    ctx.hard_reject = true;\n    ctx.reject_reasons.push(`Excluded company type: ${excludedCompanyTypeHits.join(', ')}`);\n  }\n\n  const reviewCompanyTypeHits = findMatchingPatterns(companyFields, policy.review_company_types);\n  if (reviewCompanyTypeHits.length) {\n    ctx.review_reasons.push(`Review company type: ${reviewCompanyTypeHits.join(', ')}`);\n  }\n\n  const targetCompanyTypeHits = findMatchingPatterns(companyFields, policy.target_company_types);\n  if (targetCompanyTypeHits.length) {\n    ctx.positive_signals.push(`Target company type: ${targetCompanyTypeHits.join(', ')}`);\n  }\n\n  // Departments\n  const excludedDeptHits = findMatchingPatterns(roleFields, policy.excluded_departments);\n  if (excludedDeptHits.length) {\n    ctx.hard_reject = true;\n    ctx.reject_reasons.push(`Excluded department: ${excludedDeptHits.join(', ')}`);\n  }\n\n  const targetDeptHits = findMatchingPatterns(roleFields, policy.target_departments);\n  if (targetDeptHits.length) {\n    ctx.positive_signals.push(`Target department: ${targetDeptHits.join(', ')}`);\n  }\n\n  // Suppression requirement for CRM path\n  if (toBool(policy.require_no_suppression_match) && ctx.suppression_matches.length > 0) {\n    ctx.risk_flags.push('Suppression match present (require_no_suppression_match)');\n  }\n\n  return ctx;\n}\n\n// --- MAIN (n8n) ---\nreturn items.map(item => {\n  const data = item.json || {};\n  const lead = data.lead || data;\n  const policy = data.policy || null;\n  const suppressions = data.suppressions || [];\n\n  const evaluation = evaluateHardRules(lead, policy, suppressions);\n\n  return {\n    json: {\n      lead,\n      policy,\n      suppressions,\n      evaluation,\n    },\n  };\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        300
+      ],
+      "id": "evaluate-rules-001",
+      "name": "Evaluate Hard Rules"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ======================================================\n// n8n Code Node - Build Decision Output\n// Mode: Run Once for All Items\n// Input: lead, policy, evaluation context\n// Output: final decision + webhook response + NocoDB row\n// ======================================================\n\nfunction computeConfidence(lead, evaluation, status) {\n  let score = 50;\n  score += Math.min(lead.profile_score || 0, 5) * 5;\n  score += Math.min(lead.company_score || 0, 5) * 3;\n  score += (evaluation.positive_signals || []).length * 5;\n  score -= (evaluation.risk_flags || []).length * 8;\n  score -= (evaluation.review_reasons || []).length * 4;\n\n  if (status === 'READY_FOR_CRM') score = Math.max(score, 75);\n  if (status === 'REJECTED' || status === 'SUPPRESSED') score = Math.min(score, 30);\n  if (status === 'READY_FOR_REVIEW') score = Math.min(Math.max(score, 40), 70);\n\n  return Math.max(0, Math.min(100, Math.round(score)));\n}\n\nfunction buildDecision(lead, policy, evaluation) {\n  const ev = evaluation || {};\n  const parsedPolicy = policy || {};\n\n  let qualification_status = 'READY_FOR_REVIEW';\n  let reject_reason = '';\n  let review_reason = '';\n  let decision_reason = '';\n  let crm_sync_status = 'review';\n\n  const autoReadyThreshold = Number(parsedPolicy.auto_ready_threshold) || 1;\n  const reviewThreshold = Number(parsedPolicy.review_threshold) || 1;\n  const crmProfileScore = Number(parsedPolicy.ready_for_crm_profile_score) || 4;\n  const crmCompanyScore = Number(parsedPolicy.ready_for_crm_company_score) || 3;\n\n  const positiveCount = (ev.positive_signals || []).length;\n  const riskCount = (ev.risk_flags || []).length;\n  const hasReject = ev.hard_reject || ev.suppression_reject || (ev.reject_reasons || []).length > 0;\n\n  if (ev.suppression_reject) {\n    qualification_status = 'SUPPRESSED';\n    reject_reason = (ev.reject_reasons || []).join('; ') || 'Suppression match';\n    decision_reason = reject_reason;\n    crm_sync_status = 'blocked';\n  } else if (hasReject) {\n    qualification_status = 'REJECTED';\n    reject_reason = (ev.reject_reasons || []).join('; ');\n    decision_reason = reject_reason;\n    crm_sync_status = 'blocked';\n  } else if (!ev.policy_found || ev.force_review) {\n    qualification_status = 'READY_FOR_REVIEW';\n    review_reason = (ev.review_reasons || []).join('; ') || 'No active policy found';\n    decision_reason = review_reason;\n    crm_sync_status = 'review';\n  } else if (\n    lead.profile_score >= crmProfileScore &&\n    lead.company_score >= crmCompanyScore &&\n    positiveCount >= autoReadyThreshold &&\n    riskCount === 0 &&\n    (ev.review_reasons || []).length === 0\n  ) {\n    qualification_status = 'READY_FOR_CRM';\n    decision_reason = `Meets CRM thresholds (profile ${lead.profile_score}, company ${lead.company_score}) with ${positiveCount} positive signal(s)`;\n    crm_sync_status = 'pending';\n  } else if (\n    (ev.review_reasons || []).length > 0 ||\n    riskCount >= reviewThreshold ||\n    positiveCount < autoReadyThreshold\n  ) {\n    qualification_status = 'READY_FOR_REVIEW';\n    const parts = [];\n    if ((ev.review_reasons || []).length) parts.push(...ev.review_reasons);\n    if (riskCount >= reviewThreshold) parts.push(`${riskCount} risk flag(s)`);\n    if (positiveCount < autoReadyThreshold) parts.push(`Insufficient positive signals (${positiveCount}/${autoReadyThreshold})`);\n    review_reason = parts.join('; ');\n    decision_reason = review_reason || 'Ambiguous — manual review recommended';\n    crm_sync_status = 'review';\n  } else {\n    qualification_status = 'READY_FOR_REVIEW';\n    review_reason = 'Did not meet auto-ready criteria';\n    decision_reason = review_reason;\n    crm_sync_status = 'review';\n  }\n\n  const qualification_confidence = computeConfidence(lead, ev, qualification_status);\n\n  const webhook_response = {\n    source_row_id: String(lead.source_row_id || ''),\n    linkedin_url: lead.linkedin_url || '',\n    campaign_name: lead.campaign_name || '',\n    qualification_status,\n    qualification_confidence,\n    decision_reason,\n    risk_flags: ev.risk_flags || [],\n    positive_signals: ev.positive_signals || [],\n    crm_sync_status,\n  };\n\n  const lead_decision_row = {\n    account_id: lead.account_id || '',\n    campaign_name: lead.campaign_name || '',\n    product_name: parsedPolicy.product_name || '',\n    motion_type: parsedPolicy.motion_type || '',\n    source_row_id: lead.source_row_id || null,\n    profile_id: lead.profile_id || '',\n    public_identifier: lead.public_identifier || '',\n    linkedin_url: lead.linkedin_url || '',\n    profile_url: lead.profile_url || '',\n    name: lead.name || '',\n    first_name: lead.first_name || '',\n    last_name: lead.last_name || '',\n    headline: lead.headline || '',\n    country_code: lead.country_code || '',\n    country: lead.country || '',\n    state: lead.state || '',\n    city: lead.city || '',\n    location: lead.location || '',\n    company_name: lead.company_name || '',\n    company_linkedin_url: lead.company_linkedin_url || '',\n    company_industry: lead.company_industry || '',\n    current_position: lead.current_position || '',\n    current_company_description: lead.current_company_description || '',\n    summary: lead.summary || '',\n    quick_summary: lead.quick_summary || '',\n    connections_count: lead.connections_count || null,\n    follower_count: lead.follower_count || null,\n    skills_text: lead.skills_text || '',\n    top_skills_text: lead.top_skills_text || '',\n    react_type: lead.react_type || '',\n    reacts_count: lead.reacts_count || null,\n    reacted_posts_count: lead.reacted_posts_count || null,\n    post_url: lead.post_url || '',\n    profile_score: lead.profile_score || null,\n    profile_score_summary: lead.profile_score_summary || '',\n    company_score: lead.company_score || null,\n    company_score_summary: lead.company_score_summary || '',\n    current_company_employee_count: lead.current_company_employee_count || null,\n    current_company_headquarter_city: lead.current_company_headquarter_city || '',\n    current_company_headquarter_country: lead.current_company_headquarter_country || '',\n    current_company_headquarter_region: lead.current_company_headquarter_region || '',\n    email_enriched: lead.email_enriched || '',\n    qualification_status,\n    qualification_confidence,\n    decision_reason,\n    reject_reason,\n    review_reason,\n    suppression_matches: JSON.stringify(ev.suppression_matches || []),\n    risk_flags: JSON.stringify(ev.risk_flags || []),\n    positive_signals: JSON.stringify(ev.positive_signals || []),\n    crm_sync_status,\n    raw_payload: lead.raw_payload || '',\n  };\n\n  return {\n    ...lead_decision_row,\n    webhook_response,\n    evaluation: ev,\n  };\n}\n\nreturn items.map(item => {\n  const data = item.json || {};\n  const lead = data.lead || {};\n  const policy = data.policy || {};\n  const evaluation = data.evaluation || {};\n\n  const decision = buildDecision(lead, policy, evaluation);\n\n  return {\n    json: {\n      lead,\n      policy,\n      evaluation,\n      existing_decision_id: data.existing_decision_id || null,\n      ...decision,\n    },\n  };\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        300
+      ],
+      "id": "build-output-001",
+      "name": "Build Decision Output"
+    },
+    {
+      "parameters": {
+        "jsCode": "const cfg = $('config1').first().json;\nconst data = $input.first().json;\nconst tableId = cfg.nocodb_lead_decisions_table_id;\nconst baseUrl = String(cfg.nocodb_base_url || '').replace(/\\/$/, '');\nconst token = cfg.nocodb_api_token;\nconst row = { ...data };\ndelete row.lead; delete row.policy; delete row.evaluation; delete row.webhook_response; delete row.existing_decision_id;\nconst headers = { 'xc-token': token, 'Content-Type': 'application/json' };\nconst existingId = data.existing_decision_id;\nlet saveResult;\nif (existingId) {\n  saveResult = await this.helpers.httpRequest({ method: 'PATCH', url: `${baseUrl}/api/v2/tables/${tableId}/records`, headers, body: { id: existingId, ...row }, json: true });\n} else {\n  saveResult = await this.helpers.httpRequest({ method: 'POST', url: `${baseUrl}/api/v2/tables/${tableId}/records`, headers, body: row, json: true });\n}\nreturn [{ json: { webhook_response: data.webhook_response, save_result: saveResult, qualification_status: data.qualification_status } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        300
+      ],
+      "id": "save-decision-001",
+      "name": "Save Lead Decision"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json.webhook_response }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1440,
+        300
+      ],
+      "id": "respond-webhook-001",
+      "name": "Respond to Webhook"
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "config1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "config1": {
+      "main": [
+        [
+          {
+            "node": "Normalize Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Lead": {
+      "main": [
+        [
+          {
+            "node": "Load Campaign Policy",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Campaign Policy": {
+      "main": [
+        [
+          {
+            "node": "Load Default Policy",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Default Policy": {
+      "main": [
+        [
+          {
+            "node": "Load Suppressions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Suppressions": {
+      "main": [
+        [
+          {
+            "node": "Idempotency Lookup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Idempotency Lookup": {
+      "main": [
+        [
+          {
+            "node": "Merge Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Context": {
+      "main": [
+        [
+          {
+            "node": "Evaluate Hard Rules",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evaluate Hard Rules": {
+      "main": [
+        [
+          {
+            "node": "Build Decision Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Decision Output": {
+      "main": [
+        [
+          {
+            "node": "Save Lead Decision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Lead Decision": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

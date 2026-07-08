@@ -1,0 +1,35 @@
+---
+description: NextConvers Qualification Gate project conventions
+globs:
+  - "**/*"
+alwaysApply: true
+---
+
+# NextConvers Qualification Gate
+
+## Architecture rule (critical)
+
+All client-specific ICP logic MUST live in NocoDB configuration (`campaign_policies`, `suppression_entities`) or `config/examples/` seed JSON.
+
+NEVER hardcode client names, campaigns, roles, industries, or keywords in:
+- `n8n/code-nodes/*.js`
+- `n8n/workflows/*.json` code nodes
+
+## When changing qualification logic
+
+1. Edit `n8n/code-nodes/*.js` (generic rules only)
+2. Regenerate or sync inline code in `n8n/workflows/qualification-gate-mvp.json`
+3. Run `node scripts/run-local-qualification-test.js`
+4. Update `tests/expected-decisions.md` if behavior changes
+
+## When changing ICP for a client
+
+Edit NocoDB `campaign_policies` or `config/examples/` — NOT the workflow.
+
+## MVP scope
+
+Do not add CRM sync, AI qualification, Unipile, or LinkedIn automation unless explicitly requested.
+
+## n8n config
+
+Operators edit only the `config1` node for secrets and table IDs.

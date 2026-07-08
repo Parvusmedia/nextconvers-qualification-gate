@@ -1,0 +1,80 @@
+{
+  "account_id": "REPLACE_WITH_TELEFONICA_ACCOUNT_ID",
+  "campaign_name": "Cyberseguro - Brokers",
+  "product_name": "Cyberseguro",
+  "motion_type": "broker_channel",
+  "active": true,
+  "target_description": "Insurance brokers, agents and corredurías that can distribute Cyberseguro to business clients.",
+  "allowed_countries": ["ES", "PT"],
+  "excluded_countries": [],
+  "allowed_industries": [],
+  "excluded_industries": [],
+  "target_roles": [
+    "Insurance Broker",
+    "Corredor de seguros",
+    "Correduría",
+    "Insurance Agent",
+    "Commercial Director",
+    "Sales Director",
+    "Business Insurance Specialist",
+    "SME Insurance Broker",
+    "Broker Manager",
+    "Partner",
+    "Founder"
+  ],
+  "review_roles": [
+    "Insurance Consultant",
+    "Risk Consultant",
+    "Financial Advisor",
+    "Legal Advisor"
+  ],
+  "excluded_roles": [
+    "Recruiter",
+    "Talent Acquisition",
+    "Student",
+    "Intern",
+    "Claims Adjuster",
+    "Perito",
+    "Lawyer without broker activity"
+  ],
+  "target_departments": [],
+  "excluded_departments": [],
+  "target_company_types": [
+    "insurance brokerage",
+    "correduría de seguros",
+    "insurance agency",
+    "broker",
+    "commercial insurance",
+    "business insurance"
+  ],
+  "review_company_types": [],
+  "excluded_company_types": [
+    "insurance company competitor",
+    "recruitment agency",
+    "claims management",
+    "law firm without broker activity",
+    "training company"
+  ],
+  "target_keywords": [],
+  "review_keywords": [],
+  "excluded_keywords": [
+    "recruiter",
+    "talent acquisition",
+    "student",
+    "intern"
+  ],
+  "min_company_size": 2,
+  "max_company_size": 0,
+  "min_profile_score": 4,
+  "min_company_score": 2,
+  "ready_for_crm_profile_score": 4,
+  "ready_for_crm_company_score": 2,
+  "review_if_profile_score_high_company_score_low": true,
+  "require_no_suppression_match": true,
+  "require_no_crm_duplicate": false,
+  "require_no_existing_customer": false,
+  "require_no_competitor": true,
+  "auto_ready_threshold": 1,
+  "review_threshold": 1,
+  "policy_notes": "Example policy for Telefónica Cyberseguro broker channel. Edit arrays in NocoDB — do not change workflow code."
+}

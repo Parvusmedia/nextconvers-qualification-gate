@@ -1,0 +1,142 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nextconvers.local/schemas/qualification-policy.schema.json",
+  "title": "NextConvers Qualification Gate Configuration",
+  "description": "Schema for campaign_policies and suppression_entities configuration records.",
+  "definitions": {
+    "stringArray": {
+      "description": "Array of strings. In NocoDB, store as JSON array in Long Text.",
+      "oneOf": [
+        {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        {
+          "type": "string",
+          "description": "Comma-separated or JSON-encoded array string"
+        }
+      ]
+    },
+    "qualificationStatus": {
+      "type": "string",
+      "enum": ["READY_FOR_CRM", "READY_FOR_REVIEW", "REJECTED", "SUPPRESSED"]
+    },
+    "motionType": {
+      "type": "string",
+      "enum": ["final_client", "broker_channel", "partner", "other"]
+    },
+    "entityType": {
+      "type": "string",
+      "enum": [
+        "company_name",
+        "company_domain",
+        "linkedin_company_url",
+        "person_linkedin_url",
+        "profile_id",
+        "headline_keyword",
+        "title_keyword",
+        "company_industry",
+        "company_type",
+        "email_domain"
+      ]
+    },
+    "matchType": {
+      "type": "string",
+      "enum": ["exact", "contains", "domain", "linkedin_url", "normalized_name"]
+    },
+    "severity": {
+      "type": "string",
+      "enum": ["reject", "review"]
+    },
+    "suppressionReason": {
+      "type": "string",
+      "enum": [
+        "existing_customer",
+        "competitor",
+        "partner",
+        "provider",
+        "employee",
+        "not_icp",
+        "blocked_manually"
+      ]
+    },
+    "campaignPolicy": {
+      "type": "object",
+      "required": ["account_id", "campaign_name", "product_name", "active"],
+      "properties": {
+        "id": { "type": ["integer", "string"] },
+        "account_id": { "type": "string", "minLength": 1 },
+        "campaign_name": { "type": "string", "minLength": 1 },
+        "product_name": { "type": "string" },
+        "motion_type": { "$ref": "#/definitions/motionType" },
+        "active": { "type": "boolean" },
+        "target_description": { "type": "string" },
+        "allowed_countries": { "$ref": "#/definitions/stringArray" },
+        "excluded_countries": { "$ref": "#/definitions/stringArray" },
+        "allowed_industries": { "$ref": "#/definitions/stringArray" },
+        "excluded_industries": { "$ref": "#/definitions/stringArray" },
+        "target_roles": { "$ref": "#/definitions/stringArray" },
+        "review_roles": { "$ref": "#/definitions/stringArray" },
+        "excluded_roles": { "$ref": "#/definitions/stringArray" },
+        "target_departments": { "$ref": "#/definitions/stringArray" },
+        "excluded_departments": { "$ref": "#/definitions/stringArray" },
+        "target_company_types": { "$ref": "#/definitions/stringArray" },
+        "review_company_types": { "$ref": "#/definitions/stringArray" },
+        "excluded_company_types": { "$ref": "#/definitions/stringArray" },
+        "target_keywords": { "$ref": "#/definitions/stringArray" },
+        "review_keywords": { "$ref": "#/definitions/stringArray" },
+        "excluded_keywords": { "$ref": "#/definitions/stringArray" },
+        "min_company_size": { "type": "number", "minimum": 0 },
+        "max_company_size": { "type": "number", "minimum": 0 },
+        "min_profile_score": { "type": "number", "minimum": 0, "maximum": 5 },
+        "min_company_score": { "type": "number", "minimum": 0, "maximum": 5 },
+        "ready_for_crm_profile_score": { "type": "number", "minimum": 0, "maximum": 5 },
+        "ready_for_crm_company_score": { "type": "number", "minimum": 0, "maximum": 5 },
+        "review_if_profile_score_high_company_score_low": { "type": "boolean" },
+        "require_no_suppression_match": { "type": "boolean" },
+        "require_no_crm_duplicate": { "type": "boolean" },
+        "require_no_existing_customer": { "type": "boolean" },
+        "require_no_competitor": { "type": "boolean" },
+        "auto_ready_threshold": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Minimum positive signal count for READY_FOR_CRM"
+        },
+        "review_threshold": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Risk flag count that forces READY_FOR_REVIEW"
+        },
+        "policy_notes": { "type": "string" },
+        "created_at": { "type": "string", "format": "date-time" },
+        "updated_at": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    },
+    "suppressionEntity": {
+      "type": "object",
+      "required": ["account_id", "entity_type", "entity_value", "match_type", "severity", "active"],
+      "properties": {
+        "id": { "type": ["integer", "string"] },
+        "account_id": { "type": "string", "minLength": 1 },
+        "campaign_name": {
+          "type": "string",
+          "description": "Empty string = account-global suppression"
+        },
+        "entity_type": { "$ref": "#/definitions/entityType" },
+        "entity_value": { "type": "string", "minLength": 1 },
+        "match_type": { "$ref": "#/definitions/matchType" },
+        "reason": { "$ref": "#/definitions/suppressionReason" },
+        "severity": { "$ref": "#/definitions/severity" },
+        "active": { "type": "boolean" },
+        "created_at": { "type": "string", "format": "date-time" },
+        "updated_at": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "oneOf": [
+    { "$ref": "#/definitions/campaignPolicy" },
+    { "$ref": "#/definitions/suppressionEntity" }
+  ]
+}
