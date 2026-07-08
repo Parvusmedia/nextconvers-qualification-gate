@@ -73,12 +73,15 @@ Verify row in NocoDB `lead_decisions`.
 
 ### 5. Git remote (optional)
 
-**Why Cursor cannot:** needs your GitHub/GitLab credentials and remote URL.
+**On this VPS:** `git push` is preconfigured for this repo via local `core.sshCommand` (org key). Use:
 
 ```bash
-git remote add origin <your-repo-url>
-git push -u origin main
+git push
+# or
+./scripts/git-push.sh
 ```
+
+Remote: `git@github.com:Parvusmedia/nextconvers-qualification-gate.git`
 
 ---
 
