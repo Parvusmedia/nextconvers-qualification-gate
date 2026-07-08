@@ -1,0 +1,11 @@
+{
+  "nocodb_base_url": "https://mpa.parvusmedia.com",
+  "nocodb_base_id": "phh986hkgi1daju",
+  "nocodb_base_note": "Tables provisioned in automation base (token cannot create new base). Prefix qg_ for isolation.",
+  "nocodb_clients_table_id": "m7o4my63fuqikeg",
+  "nocodb_campaign_policies_table_id": "mgihvzrry4yo0yi",
+  "nocodb_suppression_entities_table_id": "mq2uddkho8cyepg",
+  "nocodb_lead_decisions_table_id": "mikb7c7krp5kpfm",
+  "qg_account_id": "rq1lQcYTToC9hlWD4vO94g",
+  "generated_at": "2026-07-08T09:13:29.032Z"
+}

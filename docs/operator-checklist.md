@@ -2,74 +2,65 @@
 
 Cursor completed the full MVP codebase locally. The steps below require **your credentials and external systems**.
 
-## Done by Cursor (local)
+## Done by Cursor (local + VPS)
 
 - [x] Project at `/opt/apps/nextconvers-qualification-gate`
 - [x] All docs, config schema, example policies
-- [x] n8n workflow JSON + code nodes
-- [x] NocoDB table definitions + seed instructions
+- [x] n8n workflow JSON + code nodes (table IDs patched from live deploy)
 - [x] Sample payload + expected decisions
-- [x] Local smoke test script
-- [x] Cursor project rules (`.cursor/rules/`)
+- [x] Local smoke test: `node scripts/run-local-qualification-test.js`
+- [x] **NocoDB provisioned** on `mpa.parvusmedia.com` (base `phh986hkgi1daju`, tables `qg_*`)
+- [x] **Seed data loaded** (Telefónica example policies + suppressions)
+- [x] **Live integration test passed**: `node scripts/run-live-qualification.js` → `READY_FOR_CRM`, row Id 1
+- [x] Config written: [`config/deployment.generated.json`](../config/deployment.generated.json)
 
-Run local tests anytime:
+### NocoDB table IDs (live)
 
-```bash
-node scripts/run-local-qualification-test.js
-```
+| Table | ID |
+|-------|-----|
+| qg_clients | `m7o4my63fuqikeg` |
+| qg_campaign_policies | `mgihvzrry4yo0yi` |
+| qg_suppression_entities | `mq2uddkho8cyepg` |
+| qg_lead_decisions | `mikb7c7krp5kpfm` |
+
+Re-provision anytime: `node scripts/provision-nocodb.js`
 
 ---
 
-## Requires you (external systems)
+## Requires you (remaining steps)
 
-### 1. NocoDB — create base and tables
+### 1. n8n — import workflow and set API token
 
-**Why Cursor cannot:** needs your NocoDB login on `mpa.parvusmedia.com` and UI access to create a new base.
-
-| Step | Action |
-|------|--------|
-| 1 | Log in to NocoDB |
-| 2 | Create base **NextConvers Qualification Gate** |
-| 3 | Create 7 tables per [`nocodb/tables.md`](../nocodb/tables.md) |
-| 4 | Copy each table ID |
-| 5 | Load seed data from [`nocodb/seed-data.md`](../nocodb/seed-data.md) |
-| 6 | Replace `REPLACE_WITH_TELEFONICA_ACCOUNT_ID` with real NextConvers account ID |
-| 7 | Create API token with read/write on this base |
-
-### 2. n8n — import workflow and configure secrets
-
-**Why Cursor cannot:** needs access to your n8n instance and API token (secret).
+**n8n host:** `https://pmedia.app.n8n.cloud`
 
 | Step | Action |
 |------|--------|
 | 1 | Import [`n8n/workflows/qualification-gate-mvp.json`](../n8n/workflows/qualification-gate-mvp.json) |
-| 2 | Open `config1` node |
-| 3 | Set `nocodb_base_url`, `nocodb_api_token`, all table IDs |
+| 2 | Open `config1` → set `nocodb_api_token` (NocoDB token with write access) |
+| 3 | Table IDs are **already set** in workflow JSON |
 | 4 | Activate workflow |
-| 5 | Copy production webhook URL |
+| 5 | Webhook URL: `https://pmedia.app.n8n.cloud/webhook/qualification-gate-mvp` |
+| 6 | Test: `./scripts/test-n8n-webhook.sh` |
 
-### 3. NextConvers — register webhook
-
-**Why Cursor cannot:** NextConvers core is external; webhook registration is in your NextConvers admin.
+### 2. NextConvers — register webhook
 
 | Step | Action |
 |------|--------|
-| 1 | Configure webhook URL: `https://{n8n-host}/webhook/qualification-gate-mvp` |
+| 1 | Point webhook to `https://pmedia.app.n8n.cloud/webhook/qualification-gate-mvp` |
 | 2 | Trigger when `profile_score > 3` |
-| 3 | Ensure payload includes `account_id`, `campaign_name`, scores, profile fields |
+| 3 | Ensure `account_id` in payload matches seeded value (`rq1lQcYTToC9hlWD4vO94g` or update seed) |
 
-### 4. End-to-end test against live stack
+### 3. NocoDB — optional: dedicated base
 
-**Why Cursor cannot:** needs live n8n webhook + populated NocoDB.
+Tables were created in the **automation base** (`phh986hkgi1daju`) with `qg_` prefix because the API token cannot create new bases. To move to a dedicated base later, create base in NocoDB UI and re-run provision with `NOCODB_BASE_ID=...`.
 
-```bash
-export WEBHOOK_URL="https://your-n8n.example.com/webhook/qualification-gate-mvp"
-curl -s -X POST "$WEBHOOK_URL" \
-  -H "Content-Type: application/json" \
-  -d @tests/sample-payloads/nextconvers-sample-payload.json | jq .
-```
+---
 
-Verify row in NocoDB `lead_decisions`.
+## Removed / completed (was blocking)
+
+~~NocoDB create base and tables~~ — done via `scripts/provision-nocodb.js`  
+~~Load Telefónica seed~~ — done  
+~~End-to-end NocoDB test~~ — done via `scripts/run-live-qualification.js`
 
 ### 5. Git remote (optional)
 
